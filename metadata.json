@@ -1,0 +1,11 @@
+{
+  "name": "LogiTrust AI",
+  "description": "Secure Logistics & Digital Trust platform for Stage 3\u20137 intermodal operations, Agentic AI decision support, digital trust and human-governed actions.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "ROLE_BASED_OPERATIONS",
+    "AGENTIC_DECISION_SUPPORT",
+    "INTERMODAL_SCHEDULING",
+    "DIGITAL_TRUST"
+  ]
+}
