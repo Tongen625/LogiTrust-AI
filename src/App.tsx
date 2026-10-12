@@ -16,6 +16,10 @@ import { AuditTrailView } from './views/AuditTrailView';
 import { UsersAdminView } from './views/UsersAdminView';
 import { DriverMobileView } from './views/DriverMobileView';
 import { LiveTrackingView } from './views/LiveTrackingView';
+import { TransportCoordinatorAppView } from './views/TransportCoordinatorAppView';
+import { SecurityOfficerAppView } from './views/SecurityOfficerAppView';
+import { HubOperatorAppView } from './views/HubOperatorAppView';
+import { AdminManagerAppView } from './views/AdminManagerAppView';
 
 import { CheckCircle2, AlertTriangle, ShieldAlert, X, Lock } from 'lucide-react';
 
@@ -103,6 +107,14 @@ const MainLayout: React.FC = () => {
         return <UsersAdminView />;
       case 'driver-view':
         return <DriverMobileView />;
+      case 'coordinator-app':
+        return <TransportCoordinatorAppView />;
+      case 'security-app':
+        return <SecurityOfficerAppView />;
+      case 'hub-app':
+        return <HubOperatorAppView />;
+      case 'manager-app':
+        return <AdminManagerAppView />;
       default:
         return <ControlTowerView />;
     }
