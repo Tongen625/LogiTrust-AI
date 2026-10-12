@@ -34,15 +34,19 @@ export type NavigationTab =
   | 'hub-ops'
   | 'audit'
   | 'users'
-  | 'driver-view';
+  | 'driver-view'
+  | 'manager-app'
+  | 'coordinator-app'
+  | 'security-app'
+  | 'hub-app';
 
 export const ROLE_PERMITTED_TABS: Record<UserRole, NavigationTab[]> = {
-  'Logistics Operations Manager': ['control-tower','dashboard','shipments','tracking','approvals','schedules','audit'],
-  'Security / Risk Officer': ['dashboard','shipments','tracking','security','audit'],
-  'Hub Operator': ['dashboard','shipments','tracking','hub-ops','audit'],
-  'Transport Coordinator': ['dashboard','shipments','tracking','schedules','audit'],
+  'Logistics Operations Manager': ['control-tower','dashboard','shipments','tracking','approvals','schedules','audit','manager-app'],
+  'Security / Risk Officer': ['dashboard','shipments','tracking','security','audit','security-app'],
+  'Hub Operator': ['dashboard','shipments','tracking','hub-ops','audit','hub-app'],
+  'Transport Coordinator': ['dashboard','shipments','tracking','schedules','audit','coordinator-app'],
   'Driver': ['driver-view'],
-  'Administrator': ['dashboard','users','audit'],
+  'Administrator': ['dashboard','users','audit','manager-app'],
 };
 
 export const ROLE_DEFAULT_TAB: Record<UserRole, NavigationTab> = {
