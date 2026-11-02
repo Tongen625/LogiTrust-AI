@@ -67,7 +67,7 @@ export const TopNavigation: React.FC<Props> = ({ onOpenLandingModal, onOpenMobil
   };
 
   return (
-    <header className="h-14 lg:h-16 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md sticky top-0 z-40 px-2.5 sm:px-4 flex items-center justify-between gap-2 sm:gap-3">
+    <header className="app-top-nav h-14 lg:h-16 border-b border-slate-800 bg-slate-950/95 backdrop-blur-md sticky top-0 z-40 px-2.5 sm:px-4 flex items-center justify-between gap-2 sm:gap-3">
       <div className="flex items-center gap-2 flex-1 min-w-0 max-w-md">
         <button onClick={onOpenMobileNav} className="lg:hidden p-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 hover:text-white" aria-label="Open navigation">
           <Menu className="w-4 h-4" />
