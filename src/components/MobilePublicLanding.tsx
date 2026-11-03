@@ -65,7 +65,7 @@ export const MobilePublicLanding: React.FC<Props> = ({ onEnterRole, onEnterFullC
   const { userRole } = useLogistics();
 
   return (
-    <div className="min-h-screen w-full bg-slate-950 text-slate-100 overflow-y-auto">
+    <div className="public-landing min-h-screen w-full bg-slate-950 text-slate-100 overflow-y-auto">
       <div className="relative px-5 pt-8 pb-7 border-b border-slate-800 overflow-hidden">
         <div className="absolute -top-24 -right-16 w-64 h-64 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
         <div className="absolute top-24 -left-20 w-56 h-56 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
@@ -94,7 +94,7 @@ export const MobilePublicLanding: React.FC<Props> = ({ onEnterRole, onEnterFullC
           <button
             key={tab}
             onClick={() => onEnterRole(role, tab)}
-            className="w-full text-left p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 transition flex items-center gap-3 active:scale-[0.99]"
+            className="public-role-card w-full text-left p-4 rounded-2xl bg-slate-900/90 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 transition flex items-center gap-3 active:scale-[0.99]"
           >
             <div className="w-11 h-11 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 flex items-center justify-center shrink-0">
               <Icon className="w-5 h-5" />
@@ -110,7 +110,7 @@ export const MobilePublicLanding: React.FC<Props> = ({ onEnterRole, onEnterFullC
         <div className="pt-2">
           <button
             onClick={onEnterFullConsole}
-            className="w-full p-4 rounded-2xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/15 transition flex items-center justify-between gap-3 text-left"
+            className="public-console-button w-full p-4 rounded-2xl border border-cyan-500/40 bg-cyan-500/10 hover:bg-cyan-500/15 transition flex items-center justify-between gap-3 text-left"
           >
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-slate-950/80 border border-cyan-500/25 text-cyan-300 flex items-center justify-center">

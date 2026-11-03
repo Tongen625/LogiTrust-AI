@@ -314,7 +314,7 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       'Route Risk Agent',
       'System AI',
       `High-Risk Route Deviation Breach (18.4 km)`,
-      `Vehicle V-889 GPS: 3.4682°N, 101.7381°E (Batang Kali Bypass) | Corridor tolerance: 3.0 km`,
+      `Vehicle V-889 GPS: 3.4682°N, 101.6372°E (Batang Kali Bypass) | Corridor tolerance: 3.0 km`,
       'Flagged as Potential Anomaly / Evidence Inconsistent; recommended driver telematics query',
       'Pending Security Officer Review',
       'Security Alert #TR102 activated; dispatch telematics query',

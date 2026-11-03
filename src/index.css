@@ -276,3 +276,8 @@ main [class*="border-cyan-"] { border-color:#a9ccef !important; }
 main [class*="bg-cyan-950"],main [class*="bg-cyan-900"],main [class*="bg-cyan-500/10"],main [class*="bg-cyan-500/15"],main [class*="bg-cyan-500/20"],main [class*="bg-cyan-500/30"] { background:#eaf3ff !important; }
 .public-console-button { background:linear-gradient(135deg,#155fb8,#2588e8) !important; border-color:#155fb8 !important; }
 .public-role-card:hover { border-color:#96bfe8 !important; }
+
+/* Public landing: readable brand blue instead of neon cyan; translucent icon tile on the blue console button */
+.public-landing .text-cyan-200,.public-landing .text-cyan-300,.public-landing .text-cyan-400 { color:var(--brand) !important; }
+.public-console-button [class*="bg-slate-950"] { background:rgba(255,255,255,.18) !important; border-color:rgba(255,255,255,.35) !important; }
+.public-landing .public-console-button * { color:#fff !important; }

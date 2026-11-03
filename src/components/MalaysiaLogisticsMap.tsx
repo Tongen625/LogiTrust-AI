@@ -1,42 +1,52 @@
 import React, { useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import { MapContainer, TileLayer, Polyline, CircleMarker, Marker, Tooltip, ZoomControl } from 'react-leaflet';
 import { useLogistics } from '../context/LogisticsContext';
-import { Shield, Train, Truck, AlertTriangle, CheckCircle2, Radio, Navigation } from 'lucide-react';
+import { Train, AlertTriangle } from 'lucide-react';
 
 interface Props {
   heightClass?: string;
   showControls?: boolean;
 }
 
+type LatLng = [number, number];
+
+// KTM West Coast Line (real stations): Penang hub → Taiping → Ipoh → Tanjung Malim → KL → Seremban → Tampin → Gemas → Kluang → JB Sentral
+const RAIL_ROUTE: LatLng[] = [
+  [5.2300, 100.4380], [5.1253, 100.493], [4.851, 100.74], [4.772, 100.937], [4.5975, 101.0901],
+  [4.308, 101.153], [4.172, 101.194], [3.685, 101.518], [3.319, 101.577], [3.1812, 101.6917],
+  [2.993, 101.788], [2.719, 101.94], [2.466, 102.229], [2.581, 102.611], [2.503, 102.816],
+  [2.03, 103.319], [1.66, 103.6], [1.4630, 103.7646],
+];
+
+// PLUS North–South Expressway (E1/E2) through every hub
+const ROAD_ROUTE: LatLng[] = [
+  [5.2300, 100.4380], [4.85, 100.75], [4.78, 100.95], [4.5975, 101.0901], [4.2, 101.25],
+  [3.69, 101.53], [3.32, 101.58], [3.1812, 101.6917], [2.8, 101.8], [2.73, 101.92],
+  [2.2725, 102.2858], [2.15, 102.73], [2.01, 103.07], [1.83, 103.31], [1.66, 103.6],
+  [1.4630, 103.7646],
+];
+
+const KL_HUB: LatLng = [3.1812, 101.6917];
+const IPOH_HUB: LatLng = [4.5975, 101.0901];
+const BATANG_KALI: LatLng = [3.4682, 101.6372]; // MY441829 off-corridor position
+const JB_SENTRAL: LatLng = [1.4630, 103.7646]; // MY102938 is at Johor Hub (JB Sentral rail terminal)
+
+const anomalyIcon = L.divIcon({
+  className: '',
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+  html: '<span class="relative flex h-[18px] w-[18px]"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span><span class="relative inline-flex h-[18px] w-[18px] rounded-full bg-rose-500 border-2 border-white"></span></span>',
+});
+
 export const MalaysiaLogisticsMap: React.FC<Props> = ({ heightClass = 'h-[440px]', showControls = true }) => {
   const { hubs, shipments, selectedShipmentId, setSelectedShipmentId, setActiveTab } = useLogistics();
   const [showRailOnly, setShowRailOnly] = useState(false);
   const [showAnomaliesOnly, setShowAnomaliesOnly] = useState(false);
 
-  // Approximate coordinate mapping to SVG viewBox (0,0 to 800,600)
-  // Malaysia Peninsular roughly spans Lat: 1.2 to 6.8 N, Lng: 99.8 to 104.5 E
-  const project = (lat: number, lng: number) => {
-    const minLat = 1.0;
-    const maxLat = 6.4;
-    const minLng = 100.0;
-    const maxLng = 104.5;
-
-    const x = ((lng - minLng) / (maxLng - minLng)) * 680 + 60;
-    const y = ((maxLat - lat) / (maxLat - minLat)) * 500 + 50;
-    return { x, y };
-  };
-
-  const hubCoords = hubs.map((h) => ({
-    ...h,
-    svg: project(h.lat, h.lng),
-  }));
-
-  // Selected shipment info
   const selectedShipment = shipments.find((s) => s.id === selectedShipmentId);
-
-  // Off-corridor anomaly point for MY441829 (Batang Kali)
-  const anomalyBatangKali = project(3.4682, 101.7381);
-  const klHubCoord = project(3.1812, 101.6917);
-  const ipohHubCoord = project(4.5975, 101.0901);
+  const railShipment = shipments.find((s) => s.id === 'MY102938');
 
   return (
     <div className={`logitrust-map relative w-full ${heightClass} rounded-xl border overflow-hidden flex flex-col`}>
@@ -88,186 +98,97 @@ export const MalaysiaLogisticsMap: React.FC<Props> = ({ heightClass = 'h-[440px]
         </div>
       </div>
 
-      {/* SVG Canvas */}
       <div className="w-full h-full relative">
-        <svg
-          viewBox="0 0 800 580"
-          className="w-full h-full object-contain filter drop-shadow-lg"
-          style={{ background: 'linear-gradient(180deg, #fbfdfc 0%, #eef6f2 100%)' }}
+        {/* z-0 keeps Leaflet's internal z-indexes below the floating panels */}
+        <MapContainer
+          bounds={[[1.3, 100.2], [5.5, 104.0]]}
+          boundsOptions={{ padding: [30, 30] }}
+          zoomSnap={0.25}
+          scrollWheelZoom={false}
+          zoomControl={false}
+          className="absolute inset-0 z-0"
         >
-          <defs>
-            {/* Grid pattern */}
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(90, 126, 116, 0.13)" strokeWidth="0.8" />
-            </pattern>
-
-            {/* Glowing lines filter */}
-            <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-
-            <filter id="glow-red" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="4" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-
-          {/* Background Grid */}
-          <rect width="800" height="580" fill="url(#grid)" />
-
-          {/* Peninsular Malaysia Stylized Outline */}
-          <path
-            d="M 100 60
-               Q 200 40 300 75
-               Q 420 140 520 250
-               Q 620 360 680 480
-               Q 700 560 640 560
-               Q 560 555 480 505
-               Q 380 470 300 400
-               Q 240 330 200 260
-               Q 150 200 90 170
-               Q 70 110 100 60
-               Z"
-            fill="rgba(204, 232, 224, 0.48)"
-            stroke="rgba(83, 126, 115, 0.30)"
-            strokeWidth="1.5"
-            strokeDasharray="4 4"
+          <TileLayer
+            url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           />
+          <ZoomControl position="bottomright" />
 
-          {/* Road Corridors (PLUS Highway) */}
-          {!showRailOnly && (
-            <path
-              d={`M ${project(5.2635, 100.4357).x} ${project(5.2635, 100.4357).y} 
-                  L ${project(4.5975, 101.0901).x} ${project(4.5975, 101.0901).y} 
-                  L ${project(3.1812, 101.6917).x} ${project(3.1812, 101.6917).y} 
-                  L ${project(2.2725, 102.2858).x} ${project(2.2725, 102.2858).y} 
-                  L ${project(1.4927, 103.7414).x} ${project(1.4927, 103.7414).y}`}
-              fill="none"
-              stroke="#9fb5ad"
-              strokeWidth="4"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
+          {!showRailOnly && !showAnomaliesOnly && (
+            <Polyline positions={ROAD_ROUTE} pathOptions={{ color: '#64748b', weight: 4, opacity: 0.55, dashArray: '8 6' }} />
+          )}
+          {!showAnomaliesOnly && (
+            <Polyline positions={RAIL_ROUTE} pathOptions={{ color: '#06b6d4', weight: 3.5, opacity: 0.95 }} />
           )}
 
-          {/* Railway Mainline (Glowing Cyan) */}
-          <path
-            d={`M ${project(5.2635, 100.4357).x} ${project(5.2635, 100.4357).y} 
-                Q ${project(4.8, 100.8).x} ${project(4.8, 100.8).y} ${project(4.5975, 101.0901).x} ${project(4.5975, 101.0901).y} 
-                Q ${project(3.8, 101.4).x} ${project(3.8, 101.4).y} ${project(3.1812, 101.6917).x} ${project(3.1812, 101.6917).y} 
-                Q ${project(2.6, 102.1).x} ${project(2.6, 102.1).y} ${project(2.2725, 102.2858).x} ${project(2.2725, 102.2858).y} 
-                Q ${project(1.9, 103.1).x} ${project(1.9, 103.1).y} ${project(1.4927, 103.7414).x} ${project(1.4927, 103.7414).y}`}
-            fill="none"
-            stroke="#06b6d4"
-            strokeWidth="2.5"
-            strokeDasharray="6 4"
-            filter="url(#glow-cyan)"
-            className="opacity-90"
+          {/* MY441829 route deviation: approved corridor vs actual off-corridor path */}
+          <Polyline positions={[KL_HUB, IPOH_HUB]} pathOptions={{ color: '#38bdf8', weight: 2, opacity: 0.5, dashArray: '3 4' }} />
+          <Polyline
+            positions={[KL_HUB, [3.33, 101.66], BATANG_KALI]}
+            pathOptions={{ color: '#f43f5e', weight: 3, dashArray: '6 4' }}
+            eventHandlers={{ click: () => setSelectedShipmentId('MY441829') }}
           />
+          <Marker position={BATANG_KALI} icon={anomalyIcon} eventHandlers={{ click: () => setSelectedShipmentId('MY441829') }}>
+            <Tooltip permanent direction="left" offset={[-10, 0]}>
+              <span className="font-mono text-[10px] font-bold text-rose-600">ANOMALY +18.4km (MY441829)</span>
+            </Tooltip>
+          </Marker>
 
-          {/* Route Deviation Red Vector for MY441829 */}
-          <g className="cursor-pointer" onClick={() => setSelectedShipmentId('MY441829')}>
-            {/* Approved baseline corridor */}
-            <line
-              x1={klHubCoord.x}
-              y1={klHubCoord.y}
-              x2={ipohHubCoord.x}
-              y2={ipohHubCoord.y}
-              stroke="rgba(56, 189, 248, 0.4)"
-              strokeWidth="2"
-              strokeDasharray="3 3"
-            />
-            {/* Deviation line */}
-            <path
-              d={`M ${klHubCoord.x} ${klHubCoord.y} 
-                  Q ${(klHubCoord.x + anomalyBatangKali.x) / 2 + 15} ${(klHubCoord.y + anomalyBatangKali.y) / 2} 
-                  ${anomalyBatangKali.x} ${anomalyBatangKali.y}`}
-              fill="none"
-              stroke="#f43f5e"
-              strokeWidth="3"
-              strokeDasharray="4 2"
-              filter="url(#glow-red)"
-            />
-            {/* Deviation Pulse Marker */}
-            <circle cx={anomalyBatangKali.x} cy={anomalyBatangKali.y} r="18" fill="rgba(244, 63, 94, 0.15)" className="animate-ping" style={{ transformBox: 'fill-box', transformOrigin: 'center' }} />
-            <circle cx={anomalyBatangKali.x} cy={anomalyBatangKali.y} r="8" fill="#f43f5e" stroke="#ffe4e6" strokeWidth="2" />
-            <text x={anomalyBatangKali.x + 14} y={anomalyBatangKali.y + 4} fill="#f43f5e" fontSize="11" fontWeight="700" className="font-mono">
-              ANOMALY +18.4km (MY441829)
-            </text>
-          </g>
-
-          {/* Live Shipment Marker: MY102938 (Johor Hub / Sentral Rail) */}
-          {(() => {
-            const jbCoord = project(1.4927, 103.7414);
-            const isSelected = selectedShipmentId === 'MY102938';
-            return (
-              <g
-                className="cursor-pointer transition-transform hover:scale-110"
-                style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
-                onClick={() => setSelectedShipmentId('MY102938')}
-              >
-                <circle cx={jbCoord.x - 18} cy={jbCoord.y - 20} r="12" fill={isSelected ? 'rgba(6, 182, 212, 0.25)' : 'rgba(56, 189, 248, 0.15)'} className="animate-pulse" />
-                <circle cx={jbCoord.x - 18} cy={jbCoord.y - 20} r="6" fill="#06b6d4" stroke="#ffffff" strokeWidth="2" />
-                <rect x={jbCoord.x - 68} y={jbCoord.y - 48} width="100" height="22" rx="4" fill="#0f172a" stroke="#06b6d4" strokeWidth="1" />
-                <text x={jbCoord.x - 18} y={jbCoord.y - 33} fill="#38bdf8" fontSize="10" fontWeight="700" textAnchor="middle" className="font-mono">
-                  MY102938 (Rail T108)
-                </text>
-              </g>
-            );
-          })()}
+          {/* Live rail shipment marker */}
+          {railShipment && !showAnomaliesOnly && (
+            <CircleMarker
+              center={JB_SENTRAL}
+              radius={14}
+              pathOptions={{
+                color: '#06b6d4',
+                weight: 2,
+                fillColor: '#22d3ee',
+                fillOpacity: 0.25,
+              }}
+              eventHandlers={{ click: () => setSelectedShipmentId(railShipment.id) }}
+            >
+              <Tooltip permanent direction="top" offset={[0, -14]}>
+                <span className="font-mono text-[10px] font-bold text-sky-700">
+                  {railShipment.id} ({railShipment.assignedVehicleOrTrain})
+                </span>
+              </Tooltip>
+            </CircleMarker>
+          )}
 
           {/* Hub Nodes */}
-          {hubCoords.map((hub) => {
-            const isSelected = selectedShipment?.currentLocation.includes(hub.name.split(' ')[0]);
+          {hubs.map((hub) => {
+            const city = hub.name.split(' ')[0];
+            const isSelected = selectedShipment?.currentLocation.includes(city);
             return (
-              <g
+              <CircleMarker
                 key={hub.id}
-                className="cursor-pointer transition duration-200 hover:opacity-100"
-                onClick={() => {
-                  const matching = shipments.find((s) => s.currentLocation.includes(hub.name.split(' ')[0]));
-                  if (matching) setSelectedShipmentId(matching.id);
+                center={[hub.lat, hub.lng]}
+                radius={isSelected ? 9 : 7}
+                pathOptions={{
+                  color: '#ffffff',
+                  weight: 2,
+                  fillColor: hub.status === 'Warning' ? '#f59e0b' : '#0284c7',
+                  fillOpacity: 1,
+                }}
+                eventHandlers={{
+                  click: () => {
+                    const matching = shipments.find((s) => s.currentLocation.includes(city));
+                    if (matching) setSelectedShipmentId(matching.id);
+                  },
                 }}
               >
-                {/* Glow ring */}
-                <circle
-                  cx={hub.svg.x}
-                  cy={hub.svg.y}
-                  r="14"
-                  fill="rgba(6, 182, 212, 0.08)"
-                  stroke={hub.status === 'Warning' ? '#f59e0b' : '#38bdf8'}
-                  strokeWidth="1"
-                  strokeDasharray="2 2"
-                />
-                {/* Hub Core */}
-                <circle
-                  cx={hub.svg.x}
-                  cy={hub.svg.y}
-                  r="6.5"
-                  fill={hub.status === 'Warning' ? '#f59e0b' : '#0284c7'}
-                  stroke="#ffffff"
-                  strokeWidth="2"
-                />
-                {/* Hub Badge */}
-                <g transform={`translate(${hub.svg.x + 12}, ${hub.svg.y - 12})`}>
-                  <rect width="130" height="34" rx="6" fill="rgba(15, 23, 42, 0.9)" stroke="rgba(51, 65, 85, 0.8)" strokeWidth="1" />
-                  <text x="8" y="14" fill="#f8fafc" fontSize="10.5" fontWeight="700">
-                    {hub.name.split(' ')[0]} Hub
-                  </text>
-                  <text x="8" y="27" fill="#94a3b8" fontSize="9" className="font-mono">
-                    {hub.code} • {hub.activeShipments} Parcels ({hub.capacityUtilization}%)
-                  </text>
-                </g>
-              </g>
+                <Tooltip permanent direction="right" offset={[10, 0]}>
+                  <div className="leading-tight">
+                    <div className="text-[11px] font-bold text-slate-900">{hub.name.split(' (')[0]}</div>
+                    <div className="font-mono text-[9px] text-slate-500">
+                      {hub.code} • {hub.activeShipments} Parcels ({hub.capacityUtilization}%)
+                    </div>
+                  </div>
+                </Tooltip>
+              </CircleMarker>
             );
           })}
-        </svg>
+        </MapContainer>
 
         {/* Selected Shipment HUD Info Overlay */}
         {selectedShipment && (
@@ -291,12 +212,12 @@ export const MalaysiaLogisticsMap: React.FC<Props> = ({ heightClass = 'h-[440px]
               {selectedShipment.origin} → {selectedShipment.destination}
             </div>
 
-            <div className="flex items-center justify-between text-slate-400 text-[11px] pt-1 border-t border-slate-800">
+            <div className="flex items-center justify-between gap-3 text-slate-400 text-[11px] pt-1 border-t border-slate-800">
               <span>Mode: <strong className="text-slate-200">{selectedShipment.transportMode}</strong></span>
               <span>Vehicle: <strong className="text-slate-200">{selectedShipment.assignedVehicleOrTrain}</strong></span>
             </div>
 
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
+            <div className="flex items-center justify-between gap-3 text-slate-400 text-[11px]">
               <span>ETA: <strong className="text-cyan-300">{selectedShipment.eta}</strong></span>
               <span>Hub SLA: <strong className="text-slate-200">{selectedShipment.targetArrival}</strong></span>
             </div>
