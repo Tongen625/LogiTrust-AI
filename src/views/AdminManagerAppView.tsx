@@ -109,8 +109,8 @@ export const AdminManagerAppView: React.FC = () => {
             ))}
           </div>
 
-          <div className="p-2.5 bg-cyan-950/25 rounded-xl border border-cyan-500/30 text-[10px] text-cyan-100 space-y-1">
-            <div className="font-bold flex items-center gap-1">
+          <div className="p-2.5 bg-cyan-950/25 rounded-xl border border-cyan-500/30 text-[10px] text-slate-300 space-y-1">
+            <div className="font-bold flex items-center gap-1 text-cyan-300">
               <Shield className="w-3 h-3 text-cyan-300" /> Operational Governance
             </div>
             <p>

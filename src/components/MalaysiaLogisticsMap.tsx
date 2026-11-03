@@ -124,16 +124,16 @@ export const MalaysiaLogisticsMap: React.FC<Props> = ({ heightClass = 'h-[440px]
 
           {/* Peninsular Malaysia Stylized Outline */}
           <path
-            d="M 120 70 
-               Q 160 40 220 50 
-               Q 300 80 380 120 
-               Q 460 170 520 250 
-               Q 580 320 620 400 
-               Q 660 480 640 530 
-               Q 590 550 530 520 
-               Q 440 450 380 390 
-               Q 320 330 280 260 
-               Q 230 190 170 140 
+            d="M 100 60
+               Q 200 40 300 75
+               Q 420 140 520 250
+               Q 620 360 680 480
+               Q 700 560 640 560
+               Q 560 555 480 505
+               Q 380 470 300 400
+               Q 240 330 200 260
+               Q 150 200 90 170
+               Q 70 110 100 60
                Z"
             fill="rgba(204, 232, 224, 0.48)"
             stroke="rgba(83, 126, 115, 0.30)"
@@ -196,7 +196,7 @@ export const MalaysiaLogisticsMap: React.FC<Props> = ({ heightClass = 'h-[440px]
               filter="url(#glow-red)"
             />
             {/* Deviation Pulse Marker */}
-            <circle cx={anomalyBatangKali.x} cy={anomalyBatangKali.y} r="18" fill="rgba(244, 63, 94, 0.15)" className="animate-ping" />
+            <circle cx={anomalyBatangKali.x} cy={anomalyBatangKali.y} r="18" fill="rgba(244, 63, 94, 0.15)" className="animate-ping" style={{ transformBox: 'fill-box', transformOrigin: 'center' }} />
             <circle cx={anomalyBatangKali.x} cy={anomalyBatangKali.y} r="8" fill="#f43f5e" stroke="#ffe4e6" strokeWidth="2" />
             <text x={anomalyBatangKali.x + 14} y={anomalyBatangKali.y + 4} fill="#f43f5e" fontSize="11" fontWeight="700" className="font-mono">
               ANOMALY +18.4km (MY441829)
@@ -210,6 +210,7 @@ export const MalaysiaLogisticsMap: React.FC<Props> = ({ heightClass = 'h-[440px]
             return (
               <g
                 className="cursor-pointer transition-transform hover:scale-110"
+                style={{ transformBox: 'fill-box', transformOrigin: 'center' }}
                 onClick={() => setSelectedShipmentId('MY102938')}
               >
                 <circle cx={jbCoord.x - 18} cy={jbCoord.y - 20} r="12" fill={isSelected ? 'rgba(6, 182, 212, 0.25)' : 'rgba(56, 189, 248, 0.15)'} className="animate-pulse" />

@@ -144,7 +144,7 @@ export const DashboardView: React.FC = () => {
                       <td className="py-2 px-3 font-mono">{train.arrival}</td>
                       <td className="py-2 px-3">
                         <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          className={`inline-block whitespace-nowrap px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                             train.status === 'Delayed'
                               ? 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
                               : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
