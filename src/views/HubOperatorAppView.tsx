@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useLogistics } from '../context/LogisticsContext';
+import { MobileTabBar, MobileProfileCard } from '../components/MobileTabBar';
 import { CheckCircle2, ShieldCheck, ScanLine, Building2, AlertTriangle, ArrowRightLeft } from 'lucide-react';
 
 export const HubOperatorAppView: React.FC = () => {
   const { handoffs, verifyHandoffAction } = useLogistics();
   const [message, setMessage] = useState<string | null>(null);
+  const TABS = ['Queue', 'Verify', 'Hubs', 'Profile'];
+  const [tab, setTab] = useState(TABS[0]);
+  const show = (t: string) => tab === TABS[0] || tab === t;
 
   const notify = (msg: string) => {
     setMessage(msg);
@@ -65,7 +69,8 @@ export const HubOperatorAppView: React.FC = () => {
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs">
-          {primaryHandoff && (
+          {tab === 'Profile' && <MobileProfileCard />}
+          {show('Verify') && primaryHandoff && (
             <div className="p-3.5 bg-slate-900 rounded-2xl border border-cyan-500/40 shadow-lg space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase font-bold text-cyan-400">Current Handoff Review</span>
@@ -109,9 +114,9 @@ export const HubOperatorAppView: React.FC = () => {
             </div>
           )}
 
-          <div className="space-y-2">
+          {show('Hubs') && <div className="space-y-2">
             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Recent Custody Tokens</span>
-            {handoffs.slice(0, 3).map((handoff) => (
+            {handoffs.slice(0, tab === 'Hubs' ? handoffs.length : 3).map((handoff) => (
               <div key={handoff.id} className="p-3 bg-slate-900 rounded-xl border border-slate-800">
                 <div className="flex items-center justify-between">
                   <div>
@@ -122,24 +127,18 @@ export const HubOperatorAppView: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
+          </div>}
 
-          <div className="p-2.5 bg-emerald-950/20 rounded-xl border border-emerald-500/30 text-[10px] text-emerald-100 space-y-1">
-            <div className="font-bold flex items-center gap-1">
+          {tab === TABS[0] && <div className="p-2.5 bg-emerald-950/20 rounded-xl border border-emerald-500/30 text-[10px] text-slate-300 space-y-1">
+            <div className="font-bold flex items-center gap-1 text-emerald-300">
               <ArrowRightLeft className="w-3 h-3 text-emerald-300" /> Scope Guardrail
             </div>
             <p>
               The Trust / Handoff Agent and this app operate through Stage 6 Destination Hub only. Stage 7 continues as operational dispatch tracking without recipient verification.
             </p>
-          </div>
+          </div>}
         </div>
-
-        <div className="bg-slate-900 border-t border-slate-800 p-2 flex justify-around text-[10px] text-slate-400 font-medium">
-          <span className="text-cyan-400 font-bold">Queue</span>
-          <span>Verify</span>
-          <span>Hubs</span>
-          <span>Profile</span>
-        </div>
+        <MobileTabBar tabs={TABS} active={tab} onChange={setTab} />
       </div>
     </div>
   );

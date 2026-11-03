@@ -124,17 +124,28 @@ export const AuditTrailView: React.FC = () => {
                     <div className="truncate max-w-[160px]">{log.aiDecision}</div>
                   </td>
                   <td className="py-2.5 px-3">
-                    <span
-                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                        log.humanDecision.includes('APPROVED') || log.humanDecision.includes('Auto')
-                          ? 'bg-emerald-500/20 text-emerald-300'
-                          : log.humanDecision.includes('REJECTED')
-                          ? 'bg-rose-500/20 text-rose-300'
-                          : 'bg-amber-500/20 text-amber-300'
-                      }`}
-                    >
-                      {log.humanDecision}
-                    </span>
+                    {(() => {
+                      const d = log.humanDecision.toLowerCase();
+                      const [label, tone] = d.includes('reject')
+                        ? ['Rejected', 'bg-rose-500/20 text-rose-300 border-rose-500/40']
+                        : d.includes('pending')
+                        ? ['Pending', 'bg-amber-500/20 text-amber-300 border-amber-500/40']
+                        : d.includes('auto')
+                        ? ['Auto-Accepted', 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40']
+                        : ['Approved', 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'];
+                      return (
+                        <>
+                          <span className={`inline-block whitespace-nowrap px-1.5 py-0.5 rounded border text-[10px] font-bold uppercase ${tone}`}>
+                            {label}
+                          </span>
+                          {d !== label.toLowerCase() && (
+                            <div className="truncate max-w-[180px] text-[10px] text-slate-400 mt-1" title={log.humanDecision}>
+                              {log.humanDecision}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </td>
                   <td className="py-2.5 px-3 text-[11px] text-slate-300">
                     <div className="truncate max-w-[180px]">{log.result}</div>

@@ -170,7 +170,7 @@ export const ShipmentsView: React.FC = () => {
                       </td>
                       <td className="py-2.5 px-3">
                         <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                          className={`inline-block whitespace-nowrap px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
                             s.status === 'Delayed'
                               ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                               : s.status === 'Security Review'

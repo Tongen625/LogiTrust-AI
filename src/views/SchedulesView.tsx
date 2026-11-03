@@ -307,7 +307,7 @@ export const SchedulesView: React.FC = () => {
                   </td>
                   <td className="py-3 px-3">
                     <span
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      className={`inline-block whitespace-nowrap px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                         opt.deadlineFeasible
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                           : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'

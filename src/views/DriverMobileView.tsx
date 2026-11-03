@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLogistics } from '../context/LogisticsContext';
+import { MobileTabBar, MobileProfileCard } from '../components/MobileTabBar';
 import {
   Smartphone,
   Navigation,
@@ -25,6 +26,9 @@ export const DriverMobileView: React.FC = () => {
   const [incidentText, setIncidentText] = useState('');
 
   const [mobileMessage, setMobileMessage] = useState<string | null>(null);
+  const TABS = ['Hub Runs', 'Scanner', 'Telematics', 'Profile'];
+  const [tab, setTab] = useState(TABS[0]);
+  const show = (t: string) => tab === TABS[0] || tab === t;
 
   const showMobileNotice = (msg: string) => {
     setMobileMessage(msg);
@@ -80,8 +84,9 @@ export const DriverMobileView: React.FC = () => {
 
         {/* Content Area */}
         <div className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs">
+          {tab === 'Profile' && <MobileProfileCard />}
           {/* Next Inter-Hub Job Card */}
-          <div className="p-3.5 bg-slate-900 rounded-2xl border border-cyan-500/40 shadow-lg space-y-2.5">
+          {show('Scanner') && <div className="p-3.5 bg-slate-900 rounded-2xl border border-cyan-500/40 shadow-lg space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase font-bold text-cyan-400">Current Hub Consignment</span>
               <span className="font-mono text-xs font-bold text-white">{nextJob.id}</span>
@@ -118,10 +123,10 @@ export const DriverMobileView: React.FC = () => {
                 <QrCode className="w-3 h-3" /> Scan Hub Seal
               </button>
             </div>
-          </div>
+          </div>}
 
           {/* Workflow Actions (Stages 3 to 7) */}
-          <div className="space-y-2">
+          {tab === TABS[0] && <div className="space-y-2">
             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">
               Operational Milestones (Stages 3 - 7)
             </span>
@@ -187,10 +192,10 @@ export const DriverMobileView: React.FC = () => {
               </button>
               <p className="text-[10px] text-slate-500 leading-relaxed">Operational fields only: driver, vehicle, route, status and ETA. No recipient, OTP, signature or proof-of-delivery functions are included.</p>
             </div>
-          </div>
+          </div>}
 
           {/* Incident / Detour Reporting */}
-          <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
+          {show('Telematics') && <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
             <span className="text-[10px] uppercase font-bold text-amber-400 block">
               Driver Telematics Incident Report
             </span>
@@ -210,26 +215,19 @@ export const DriverMobileView: React.FC = () => {
             >
               Send Telematics Note to Control Tower
             </button>
-          </div>
+          </div>}
 
           {/* CRITICAL SAFEGUARD WARNING */}
-          <div className="p-2.5 bg-rose-950/30 rounded-xl border border-rose-500/40 text-[10px] text-rose-200 space-y-1">
+          {tab === TABS[0] && <div className="p-2.5 bg-rose-950/30 rounded-xl border border-rose-500/40 text-[10px] text-rose-200 space-y-1">
             <div className="font-bold flex items-center gap-1">
               <Lock className="w-3 h-3 text-rose-400" /> Security Safeguard Constraint
             </div>
             <p>
               Drivers cannot self-approve or dismiss off-corridor geofence deviations. High-risk security exceptions must be cleared by the Security / Risk Officer.
             </p>
-          </div>
+          </div>}
         </div>
-
-        {/* Mobile Bottom Bar */}
-        <div className="bg-slate-900 border-t border-slate-800 p-2 flex justify-around text-[10px] text-slate-400 font-medium">
-          <span className="text-cyan-400 font-bold">Hub Runs</span>
-          <span>Scanner</span>
-          <span>Telematics</span>
-          <span>Profile</span>
-        </div>
+        <MobileTabBar tabs={TABS} active={tab} onChange={setTab} />
       </div>
     </div>
   );

@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useLogistics } from '../context/LogisticsContext';
+import { MobileTabBar, MobileProfileCard } from '../components/MobileTabBar';
 import { AlertTriangle, ShieldAlert, MapPinned, Send, CheckCircle2, Siren, Lock } from 'lucide-react';
 
 export const SecurityOfficerAppView: React.FC = () => {
   const { securityAlerts, requestDriverVerification, resolveSecurityAlert, escalateSecurityAlert } = useLogistics();
   const [message, setMessage] = useState<string | null>(null);
+  const TABS = ['Alerts', 'Evidence', 'Actions', 'Profile'];
+  const [tab, setTab] = useState(TABS[0]);
+  const show = (t: string) => tab === TABS[0] || tab === t;
 
   const notify = (msg: string) => {
     setMessage(msg);
@@ -58,7 +62,8 @@ export const SecurityOfficerAppView: React.FC = () => {
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs">
-          {primaryAlert && (
+          {tab === 'Profile' && <MobileProfileCard />}
+          {show('Actions') && primaryAlert && (
             <div className="p-3.5 bg-slate-900 rounded-2xl border border-rose-500/40 shadow-lg space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase font-bold text-rose-300">Primary Incident</span>
@@ -102,9 +107,9 @@ export const SecurityOfficerAppView: React.FC = () => {
             </div>
           )}
 
-          <div className="space-y-2">
+          {show('Evidence') && <div className="space-y-2">
             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Evidence Timeline</span>
-            {primaryAlert?.evidence.slice(0, 4).map((item, index) => (
+            {primaryAlert?.evidence.slice(0, tab === 'Evidence' ? undefined : 4).map((item, index) => (
               <div key={`${item.time}-${index}`} className="p-3 bg-slate-900 rounded-xl border border-slate-800">
                 <div className="flex items-center justify-between">
                   <div className="font-semibold text-white">{item.time}</div>
@@ -116,33 +121,27 @@ export const SecurityOfficerAppView: React.FC = () => {
                 <div className="text-[10px] text-slate-500 mt-1">{item.sensor}</div>
               </div>
             ))}
-          </div>
+          </div>}
 
-          <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
+          {show('Actions') && <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
             <span className="text-[10px] uppercase font-bold text-cyan-400 block">Recommended Action</span>
             <div className="text-slate-200 leading-relaxed">{primaryAlert?.recommendedAction}</div>
             <div className="grid grid-cols-2 gap-2 text-[10px]">
               <div className="p-2 rounded-lg bg-slate-950 border border-slate-800"><span className="text-slate-500 block uppercase">Expected Route</span><strong className="text-slate-200">Approved Corridor</strong></div>
               <div className="p-2 rounded-lg bg-slate-950 border border-slate-800"><span className="text-slate-500 block uppercase">Offset</span><strong className="text-rose-300">{primaryAlert?.deviationKm ?? 0} km</strong></div>
             </div>
-          </div>
+          </div>}
 
-          <div className="p-2.5 bg-rose-950/30 rounded-xl border border-rose-500/40 text-[10px] text-rose-100 space-y-1">
-            <div className="font-bold flex items-center gap-1">
+          {tab === TABS[0] && <div className="p-2.5 bg-rose-950/30 rounded-xl border border-rose-500/40 text-[10px] text-slate-300 space-y-1">
+            <div className="font-bold flex items-center gap-1 text-rose-300">
               <Lock className="w-3 h-3 text-rose-400" /> Evidentiary Safeguard
             </div>
             <p>
               This app cannot automatically accuse a driver of theft or fraud. It only records evidence, requests verification and escalates for human investigation.
             </p>
-          </div>
+          </div>}
         </div>
-
-        <div className="bg-slate-900 border-t border-slate-800 p-2 flex justify-around text-[10px] text-slate-400 font-medium">
-          <span className="text-cyan-400 font-bold">Alerts</span>
-          <span>Evidence</span>
-          <span>Actions</span>
-          <span>Profile</span>
-        </div>
+        <MobileTabBar tabs={TABS} active={tab} onChange={setTab} />
       </div>
     </div>
   );

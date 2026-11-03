@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useLogistics } from '../context/LogisticsContext';
+import { MobileTabBar, MobileProfileCard } from '../components/MobileTabBar';
 import {
   CalendarDays,
   Train,
@@ -16,6 +17,9 @@ export const TransportCoordinatorAppView: React.FC = () => {
   const { trainSchedules, recommendations, updateTrainStatus, addNewTrainSchedule } = useLogistics();
   const [message, setMessage] = useState<string | null>(null);
   const [addedManualService, setAddedManualService] = useState(false);
+  const TABS = ['Schedules', 'Services', 'Fallback', 'Profile'];
+  const [tab, setTab] = useState(TABS[0]);
+  const show = (t: string) => tab === TABS[0] || tab === t;
 
   const notify = (msg: string) => {
     setMessage(msg);
@@ -66,7 +70,8 @@ export const TransportCoordinatorAppView: React.FC = () => {
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs">
-          <div className="p-3.5 bg-slate-900 rounded-2xl border border-cyan-500/40 shadow-lg space-y-2.5">
+          {tab === 'Profile' && <MobileProfileCard />}
+          {show('Fallback') && <div className="p-3.5 bg-slate-900 rounded-2xl border border-cyan-500/40 shadow-lg space-y-2.5">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase font-bold text-cyan-400">Manual Provider Fallback</span>
               <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-[10px]">ACTIVE</span>
@@ -112,11 +117,11 @@ export const TransportCoordinatorAppView: React.FC = () => {
                 <RefreshCcw className="w-3 h-3" /> Update Status
               </button>
             </div>
-          </div>
+          </div>}
 
-          <div className="space-y-2">
+          {show('Services') && <div className="space-y-2">
             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Active Rail Timetable</span>
-            {activeSchedules.map((schedule) => (
+            {(tab === 'Services' ? trainSchedules : activeSchedules).map((schedule) => (
               <div key={schedule.id} className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
                 <div className="flex items-center justify-between">
                   <div>
@@ -134,9 +139,9 @@ export const TransportCoordinatorAppView: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
+          </div>}
 
-          {primaryRec && (
+          {show('Services') && primaryRec && (
             <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase font-bold text-emerald-400 block">AI Comparison Result</span>
@@ -151,22 +156,16 @@ export const TransportCoordinatorAppView: React.FC = () => {
             </div>
           )}
 
-          <div className="p-2.5 bg-blue-950/30 rounded-xl border border-blue-500/30 text-[10px] text-blue-100 space-y-1">
-            <div className="font-bold flex items-center gap-1">
+          {tab === TABS[0] && <div className="p-2.5 bg-blue-950/30 rounded-xl border border-blue-500/30 text-[10px] text-slate-300 space-y-1">
+            <div className="font-bold flex items-center gap-1 text-blue-300">
               <CalendarDays className="w-3 h-3 text-cyan-400" /> Schedule Policy Guardrail
             </div>
             <p>
               This app allows manual timetable and status handling only. Final shipment rerouting remains subject to Operations Manager approval and audit logging.
             </p>
-          </div>
+          </div>}
         </div>
-
-        <div className="bg-slate-900 border-t border-slate-800 p-2 flex justify-around text-[10px] text-slate-400 font-medium">
-          <span className="text-cyan-400 font-bold">Schedules</span>
-          <span>Services</span>
-          <span>Fallback</span>
-          <span>Profile</span>
-        </div>
+        <MobileTabBar tabs={TABS} active={tab} onChange={setTab} />
       </div>
     </div>
   );

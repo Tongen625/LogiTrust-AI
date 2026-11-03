@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useLogistics } from '../context/LogisticsContext';
+import { MobileTabBar, MobileProfileCard } from '../components/MobileTabBar';
 import { Shield, Users, CheckCircle2, FileText, Smartphone, Settings2, ArrowUpRight } from 'lucide-react';
 
 export const AdminManagerAppView: React.FC = () => {
   const { userRole, recommendations, auditLogs, currentUser, approveRecommendation, setActiveTab } = useLogistics();
   const [message, setMessage] = useState<string | null>(null);
+  const TABS = ['Overview', 'Approvals', 'Audit', 'Profile'];
+  const [tab, setTab] = useState(TABS[0]);
+  const show = (t: string) => tab === TABS[0] || tab === t;
 
   const notify = (msg: string) => {
     setMessage(msg);
@@ -54,7 +58,8 @@ export const AdminManagerAppView: React.FC = () => {
         </div>
 
         <div className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs">
-          {isManager && primaryRec && (
+          {tab === 'Profile' && <MobileProfileCard />}
+          {show('Approvals') && isManager && primaryRec && (
             <div className="p-3.5 bg-slate-900 rounded-2xl border border-cyan-500/40 shadow-lg space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] uppercase font-bold text-cyan-400">Pending Approval</span>
@@ -88,17 +93,21 @@ export const AdminManagerAppView: React.FC = () => {
             </div>
           )}
 
-          <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
+          {tab === 'Approvals' && !(isManager && primaryRec) && (
+            <p className="text-center text-slate-400 py-6">No pending approvals for this role.</p>
+          )}
+
+          {show('Audit') && <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
             <span className="text-[10px] uppercase font-bold text-amber-300 block">Governance Shortcuts</span>
             <div className="grid grid-cols-2 gap-2 text-[10px]">
               <button onClick={() => { setActiveTab('audit'); notify('Opening audit trail.'); }} className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-left hover:border-cyan-500/40 transition"><FileText className="w-4 h-4 text-cyan-400 mb-1" /><div className="font-semibold text-white">Audit Trail</div><div className="text-slate-500 mt-0.5">Review system decisions</div></button>
               <button onClick={() => { setActiveTab('users'); notify('Opening users & admin console.'); }} className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-left hover:border-cyan-500/40 transition"><Users className="w-4 h-4 text-cyan-400 mb-1" /><div className="font-semibold text-white">Users & Access</div><div className="text-slate-500 mt-0.5">Role workspace controls</div></button>
             </div>
-          </div>
+          </div>}
 
-          <div className="space-y-2">
+          {show('Audit') && <div className="space-y-2">
             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Recent Audit Events</span>
-            {auditLogs.slice(0, 3).map((log) => (
+            {auditLogs.slice(0, tab === 'Audit' ? 8 : 3).map((log) => (
               <div key={log.id} className="p-3 bg-slate-900 rounded-xl border border-slate-800">
                 <div className="flex items-center justify-between">
                   <div className="font-semibold text-white">{log.event}</div>
@@ -107,24 +116,18 @@ export const AdminManagerAppView: React.FC = () => {
                 <div className="text-[11px] text-slate-400 mt-1">{log.result}</div>
               </div>
             ))}
-          </div>
+          </div>}
 
-          <div className="p-2.5 bg-cyan-950/25 rounded-xl border border-cyan-500/30 text-[10px] text-slate-300 space-y-1">
+          {tab === TABS[0] && <div className="p-2.5 bg-cyan-950/25 rounded-xl border border-cyan-500/30 text-[10px] text-slate-300 space-y-1">
             <div className="font-bold flex items-center gap-1 text-cyan-300">
               <Shield className="w-3 h-3 text-cyan-300" /> Operational Governance
             </div>
             <p>
               This app is for supervisory oversight only. It does not replace the full console for deep investigation, but provides fast approval, audit and role-management shortcuts.
             </p>
-          </div>
+          </div>}
         </div>
-
-        <div className="bg-slate-900 border-t border-slate-800 p-2 flex justify-around text-[10px] text-slate-400 font-medium">
-          <span className="text-cyan-400 font-bold">Overview</span>
-          <span>Approvals</span>
-          <span>Audit</span>
-          <span>Profile</span>
-        </div>
+        <MobileTabBar tabs={TABS} active={tab} onChange={setTab} />
       </div>
     </div>
   );
