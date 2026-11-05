@@ -8,6 +8,7 @@ import { MobilePublicLanding } from './components/MobilePublicLanding';
 
 import { ControlTowerView } from './views/ControlTowerView';
 import { DashboardView } from './views/DashboardView';
+import { TransportCoordinatorDashboardView } from './views/TransportCoordinatorDashboardView';
 import { HubDashboardView } from './views/HubDashboardView';
 import { ShipmentsView } from './views/ShipmentsView';
 import { HubShipmentsView } from './views/HubShipmentsView';
@@ -102,7 +103,10 @@ const MainLayout: React.FC = () => {
 
     switch (activeTab) {
       case 'control-tower': return <ControlTowerView />;
-      case 'dashboard': return userRole === 'Hub Operator' ? <HubDashboardView /> : <DashboardView />;
+      case 'dashboard':
+        if (userRole === 'Hub Operator') return <HubDashboardView />;
+        if (userRole === 'Transport Coordinator') return <TransportCoordinatorDashboardView />;
+        return <DashboardView />;
       case 'shipments': return userRole === 'Hub Operator' ? <HubShipmentsView /> : <ShipmentsView />;
       case 'tracking': return userRole === 'Hub Operator' ? <HubLiveTrackingView /> : <LiveTrackingView />;
       case 'schedules': return <SchedulesView />;
