@@ -35,23 +35,25 @@ export const SidebarNavigation: React.FC<Props> = ({ mobileOpen = false, onClose
   const activeAlertsCount = securityAlerts.filter((a) => a.status !== 'Resolved').length;
 
   const securityWorkspace = userRole === 'Security / Risk Officer';
+  const managerWorkspace = userRole === 'Logistics Operations Manager';
+  const adminWorkspace = userRole === 'Administrator';
 
   const allNavItems = [
-    { id: 'dashboard' as NavigationTab, label: securityWorkspace ? 'Security Overview' : 'Dashboard', icon: LayoutDashboard },
-    { id: 'control-tower' as NavigationTab, label: 'AI Control Tower', icon: Radio, highlight: true },
-    { id: 'shipments' as NavigationTab, label: securityWorkspace ? 'Risk Cases' : 'Shipments', icon: Package },
-    { id: 'tracking' as NavigationTab, label: securityWorkspace ? 'Risk Tracking' : 'Live Tracking', icon: Compass },
-    { id: 'schedules' as NavigationTab, label: 'Schedules & Fleet', icon: Calendar },
+    { id: 'dashboard' as NavigationTab, label: securityWorkspace ? 'Security Overview' : adminWorkspace ? 'Governance Overview' : managerWorkspace ? 'Network Overview' : 'Dashboard', icon: LayoutDashboard },
+    { id: 'control-tower' as NavigationTab, label: managerWorkspace ? 'Control Tower' : 'AI Control Tower', icon: Radio, highlight: true },
+    { id: 'shipments' as NavigationTab, label: securityWorkspace ? 'Risk Cases' : managerWorkspace ? 'Network Shipments' : 'Shipments', icon: Package },
+    { id: 'tracking' as NavigationTab, label: securityWorkspace ? 'Risk Tracking' : managerWorkspace ? 'Network Tracking' : 'Live Tracking', icon: Compass },
+    { id: 'schedules' as NavigationTab, label: managerWorkspace ? 'Schedule Oversight' : 'Schedules & Fleet', icon: Calendar },
     { id: 'security' as NavigationTab, label: securityWorkspace ? 'Investigations' : 'Security & Digital Trust', icon: ShieldAlert, badge: activeAlertsCount || undefined, badgeColor: 'bg-rose-500' },
-    { id: 'approvals' as NavigationTab, label: 'AI Approvals', icon: CheckSquare, badge: pendingApprovalsCount || undefined, badgeColor: 'bg-cyan-500' },
+    { id: 'approvals' as NavigationTab, label: managerWorkspace ? 'Decision Approvals' : 'AI Approvals', icon: CheckSquare, badge: pendingApprovalsCount || undefined, badgeColor: 'bg-cyan-500' },
     { id: 'hub-ops' as NavigationTab, label: 'Hub Operations', icon: Building2 },
     { id: 'coordinator-app' as NavigationTab, label: 'Coordinator App', icon: Smartphone },
     { id: 'security-app' as NavigationTab, label: 'Security Officer App', icon: Smartphone },
     { id: 'hub-app' as NavigationTab, label: 'Hub Operator App', icon: Smartphone },
-    { id: 'manager-app' as NavigationTab, label: 'Admin / Manager App', icon: Smartphone },
+    { id: 'manager-app' as NavigationTab, label: adminWorkspace ? 'Admin Governance App' : managerWorkspace ? 'Manager Oversight App' : 'Admin / Manager App', icon: Smartphone },
     { id: 'driver-view' as NavigationTab, label: 'Driver App', icon: Smartphone },
-    { id: 'audit' as NavigationTab, label: securityWorkspace ? 'Security Audit Trail' : 'Audit Trail', icon: FileText },
-    { id: 'users' as NavigationTab, label: 'Users & Admin', icon: Users },
+    { id: 'audit' as NavigationTab, label: securityWorkspace ? 'Security Audit Trail' : adminWorkspace ? 'Governance Audit Trail' : managerWorkspace ? 'Operations Audit Trail' : 'Audit Trail', icon: FileText },
+    { id: 'users' as NavigationTab, label: adminWorkspace ? 'Users & Access' : 'Users & Admin', icon: Users },
   ];
 
   const visibleNavItems = allNavItems.filter((item) => permittedTabs.includes(item.id));
@@ -62,7 +64,7 @@ export const SidebarNavigation: React.FC<Props> = ({ mobileOpen = false, onClose
   };
 
   const sidebar = (
-    <aside className="app-sidebar w-[280px] lg:w-64 bg-white border-r border-blue-100 flex flex-col shrink-0 h-full min-h-0 text-slate-700 select-none">
+    <aside className="app-sidebar relative z-40 pointer-events-auto w-[280px] lg:w-64 bg-white border-r border-blue-100 flex flex-col shrink-0 h-full min-h-0 text-slate-700 select-none">
       <div className="p-4 border-b border-blue-100 flex items-center gap-3">
         <img src="/logitrust-logo.jpeg" alt="LogiTrust AI" className="w-11 h-11 rounded-xl object-cover bg-white border border-blue-100 shadow-sm" />
         <div className="min-w-0 flex-1">
@@ -77,7 +79,7 @@ export const SidebarNavigation: React.FC<Props> = ({ mobileOpen = false, onClose
       <div className="px-3 py-3 border-b border-blue-100 text-[10px] font-mono text-slate-500">
         <div className="flex justify-between gap-2">
           <span>WORKSPACE:</span>
-          <span className="text-blue-600 font-bold truncate max-w-[160px]">{userRole}</span>
+          <span className="text-[11px] leading-4 text-blue-600 font-bold truncate max-w-[160px]">{userRole}</span>
         </div>
         <div className="flex justify-between mt-2 gap-2">
           <span>PERMITTED CONSOLES</span>
@@ -96,7 +98,7 @@ export const SidebarNavigation: React.FC<Props> = ({ mobileOpen = false, onClose
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition border ${active ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700'}`}
             >
               <Icon className={`w-4 h-4 shrink-0 ${active || item.highlight ? 'text-blue-600' : 'text-slate-500'}`} />
-              <span className="text-sm font-medium flex-1 truncate">{item.label}</span>
+              <span className="text-[14px] leading-5 font-semibold flex-1 truncate">{item.label}</span>
               {item.badge ? <span className={`${item.badgeColor} text-slate-950 min-w-5 h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-extrabold`}>{item.badge}</span> : null}
             </button>
           );
