@@ -14,12 +14,14 @@ import { SecurityDashboardView } from './views/SecurityDashboardView';
 import { TransportCoordinatorDashboardView } from './views/TransportCoordinatorDashboardView';
 import { HubDashboardView } from './views/HubDashboardView';
 import { ShipmentsView } from './views/ShipmentsView';
+import { ManagerShipmentsView } from './views/ManagerShipmentsView';
 import { SecurityShipmentsView } from './views/SecurityShipmentsView';
 import { HubShipmentsView } from './views/HubShipmentsView';
 import { TransportCoordinatorShipmentsView } from './views/TransportCoordinatorShipmentsView';
 import { TransportCoordinatorLiveTrackingView } from './views/TransportCoordinatorLiveTrackingView';
 import { TransportCoordinatorAuditTrailView } from './views/TransportCoordinatorAuditTrailView';
 import { SchedulesView } from './views/SchedulesView';
+import { ManagerSchedulesView } from './views/ManagerSchedulesView';
 import { SecurityTrustView } from './views/SecurityTrustView';
 import { ApprovalsView } from './views/ApprovalsView';
 import { HubOperationsView } from './views/HubOperationsView';
@@ -113,9 +115,9 @@ const MainLayout: React.FC = () => {
     switch (activeTab) {
       case 'control-tower': return <ControlTowerView />;
       case 'dashboard': return userRole === 'Hub Operator' ? <HubDashboardView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorDashboardView /> : userRole === 'Security / Risk Officer' ? <SecurityDashboardView /> : userRole === 'Administrator' ? <AdminDashboardView /> : userRole === 'Logistics Operations Manager' ? <ManagerDashboardView /> : <DashboardView />;
-      case 'shipments': return userRole === 'Hub Operator' ? <HubShipmentsView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorShipmentsView /> : userRole === 'Security / Risk Officer' ? <SecurityShipmentsView /> : <ShipmentsView />;
+      case 'shipments': return userRole === 'Hub Operator' ? <HubShipmentsView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorShipmentsView /> : userRole === 'Security / Risk Officer' ? <SecurityShipmentsView /> : userRole === 'Logistics Operations Manager' ? <ManagerShipmentsView /> : <ShipmentsView />;
       case 'tracking': return userRole === 'Hub Operator' ? <HubLiveTrackingView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorLiveTrackingView /> : userRole === 'Security / Risk Officer' ? <SecurityLiveTrackingView /> : <LiveTrackingView />;
-      case 'schedules': return <SchedulesView />;
+      case 'schedules': return userRole === 'Logistics Operations Manager' ? <ManagerSchedulesView /> : <SchedulesView />;
       case 'security': return <SecurityTrustView />;
       case 'approvals': return <ApprovalsView />;
       case 'hub-ops': return <HubOperationsView />;
@@ -143,9 +145,9 @@ const MainLayout: React.FC = () => {
 
   return (
     <div className="flex h-[100dvh] w-full overflow-hidden bg-[#f5f7f6] font-sans text-[#183a34]">
-      <SidebarNavigation mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} />
+      <div className="relative z-40 shrink-0 h-full"><SidebarNavigation mobileOpen={mobileNavOpen} onCloseMobile={() => setMobileNavOpen(false)} /></div>
 
-      <div className="flex-1 flex flex-col min-w-0 h-[100dvh] overflow-hidden">
+      <div className="relative z-0 flex-1 flex flex-col min-w-0 h-[100dvh] overflow-hidden">
         <TopNavigation
           onOpenLandingModal={() => setIsLandingOpen(true)}
           onOpenMobileNav={() => setMobileNavOpen(true)}
