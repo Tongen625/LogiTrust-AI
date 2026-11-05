@@ -36,7 +36,6 @@ export const ControlTowerView: React.FC = () => {
     simulationResult,
     incidents,
     addIncident,
-    resolveIncident,
   } = useLogistics();
 
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
@@ -49,7 +48,7 @@ export const ControlTowerView: React.FC = () => {
   const [incidentDetails, setIncidentDetails] = useState('Operational disruption reported; calculate reroute impact.');
 
   // Active AI Recommendation
-  const rec = recommendations[0];
+  const rec = recommendations.find((r) => r.status === 'Pending Approval') || recommendations[0];
   const targetShipment = shipments.find((s) => s.id === rec?.shipmentId) || shipments[0];
 
   const pendingCount = recommendations.filter((r) => r.status === 'Pending Approval').length;
@@ -65,14 +64,14 @@ export const ControlTowerView: React.FC = () => {
               <Radio className="w-4 h-4 animate-pulse" />
             </span>
             <h1 className="text-lg font-extrabold text-white tracking-wide">
-              AI Logistics Control Tower
+              Network Control Tower
             </h1>
             <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
               SYSTEM LIVE
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Real-time intermodal tracking, cybersecurity anomaly detection & human-governed orchestration
+            Real-time network status, transport exceptions, security signals and manager decisions
           </p>
         </div>
 
@@ -80,10 +79,10 @@ export const ControlTowerView: React.FC = () => {
         <div className="flex items-center gap-4 text-xs font-mono">
           <div className="px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800">
             <span className="text-slate-400 block text-[10px] uppercase">Active Fleet</span>
-            <span className="text-base font-bold text-white">38 Shipments</span>
+            <span className="text-base font-bold text-white">{shipments.length} Shipments</span>
           </div>
           <div className="px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800">
-            <span className="text-slate-400 block text-[10px] uppercase">Pending AI Approvals</span>
+            <span className="text-slate-400 block text-[10px] uppercase">Pending Decisions</span>
             <span className="text-base font-bold text-cyan-400">{pendingCount} Action Req.</span>
           </div>
           <div className="px-3 py-1.5 rounded-xl bg-slate-950/80 border border-slate-800">
@@ -92,9 +91,6 @@ export const ControlTowerView: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* Autonomous Mesh Architecture */}
-      <AIAgentArchitectureBar />
 
       {/* Main Grid: Live Map + AI Recommendation Engine */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -129,11 +125,6 @@ export const ControlTowerView: React.FC = () => {
             </div>
 
             <div className="mt-3 space-y-2.5">
-              <div className="flex justify-end">
-                <button onClick={() => setShowIncidentModal(true)} className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs flex items-center gap-1.5">
-                  <Plus className="w-4 h-4" /> Add Incident
-                </button>
-              </div>
               {incidents.slice(0,4).map((incident) => (
                 <div key={incident.id} className="p-3 bg-amber-950/20 rounded-xl border border-amber-800/40 space-y-2">
                   <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
@@ -156,8 +147,12 @@ export const ControlTowerView: React.FC = () => {
                     <div className="p-1.5 bg-slate-950 rounded border border-slate-800"><b>SLA</b><br/>{incident.decisionFactors.sla}</div>
                   </div>
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-[11px] text-cyan-300"><b>AI recovery:</b> {incident.recommendation}</p>
-                    {incident.status !== 'Resolved' && <button onClick={() => resolveIncident(incident.id)} className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[10px] font-bold">Mark Resolved</button>}
+                    <p className="text-[11px] text-cyan-300"><b>Recommended recovery:</b> {incident.recommendation}</p>
+                    {incident.status === 'Pending Approval' ? (
+                      <button onClick={() => setActiveTab('approvals')} className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-bold">Review Approval</button>
+                    ) : incident.status !== 'Resolved' ? (
+                      <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-semibold">Specialist workflow active</span>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -179,7 +174,7 @@ export const ControlTowerView: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-xs font-extrabold uppercase tracking-wider text-white">
-                    Agentic AI Recommendation Engine
+                    Recovery Recommendation
                   </h2>
                   <span className="text-[11px] font-mono text-cyan-300">
                     Decision ID: {rec?.id || 'REC-1029'}
@@ -235,7 +230,7 @@ export const ControlTowerView: React.FC = () => {
             <div className="mt-3 p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/40 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-extrabold uppercase text-cyan-400 tracking-wider">
-                  Recommended Autonomous Action:
+                  Recommended Action:
                 </span>
                 <span className="text-[11px] font-mono text-cyan-300 font-bold bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
                   {rec?.confidence}% Confidence
@@ -258,13 +253,13 @@ export const ControlTowerView: React.FC = () => {
                 <span className="font-bold text-emerald-400 mt-0.5 block">
                   +{rec?.expectedImprovementMins} min Recovery
                 </span>
-                <span className="text-[10px] text-slate-400">Arrives 16:06 (SLA Met)</span>
+                <span className="text-[10px] text-slate-400">{rec?.expectedResult || 'Expected recovery outcome'}</span>
               </div>
 
               <div className="p-2.5 bg-slate-950/80 rounded-lg border border-slate-800">
                 <span className="text-[10px] text-slate-400 uppercase block">Carriage Capacity</span>
                 <span className="font-bold text-cyan-400 mt-0.5 block">{rec?.capacityStatus}</span>
-                <span className="text-[10px] text-slate-400">T108 54% loaded</span>
+                <span className="text-[10px] text-slate-400">{rec?.targetService || 'Alternative service capacity reviewed'}</span>
               </div>
 
               <div className="p-2.5 bg-slate-950/80 rounded-lg border border-slate-800">
@@ -276,7 +271,7 @@ export const ControlTowerView: React.FC = () => {
               <div className="p-2.5 bg-slate-950/80 rounded-lg border border-slate-800">
                 <span className="text-[10px] text-slate-400 uppercase block">Security / Chain of Custody</span>
                 <span className="font-bold text-emerald-400 mt-0.5 block">{rec?.securityRisk}</span>
-                <span className="text-[10px] text-slate-400">Biometric handoff seal OK</span>
+                <span className="text-[10px] text-slate-400">Specialist security authority remains unchanged</span>
               </div>
             </div>
 
@@ -285,30 +280,20 @@ export const ControlTowerView: React.FC = () => {
               <Shield className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <strong>Human-in-the-Loop Safeguard: </strong>
-                Agentic AI cannot unilaterally alter consequential transport plans. Human operator approval is required by system policy before execution.
+                Major transport changes require Operations Manager approval before execution.
               </div>
             </div>
 
             {/* ACTION BUTTONS: APPROVE / REJECT / REVIEW EVIDENCE */}
             <div className="mt-4 pt-3 border-t border-slate-800 flex flex-wrap items-center gap-2">
               {rec?.status === 'Pending Approval' ? (
-                <>
-                  <button
-                    onClick={() => approveRecommendation(rec.id, 'Approved via Control Tower Interface')}
-                    className="flex-1 py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-extrabold text-xs rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-1.5 transition active:scale-95"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Approve Decision
-                  </button>
-
-                  <button
-                    onClick={() => rejectRecommendation(rec.id, 'Operator prefers holding baseline plan')}
-                    className="py-2.5 px-3 bg-slate-900 hover:bg-rose-950/60 hover:border-rose-700 text-slate-300 hover:text-rose-300 font-bold text-xs rounded-xl border border-slate-800 flex items-center justify-center gap-1.5 transition"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Reject
-                  </button>
-                </>
+                <button
+                  onClick={() => setActiveTab('approvals')}
+                  className="flex-1 py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
+                >
+                  <FileSearch className="w-4 h-4" />
+                  Review in Decision Approvals
+                </button>
               ) : (
                 <div className="w-full py-2 px-3 bg-slate-950 border border-slate-800 rounded-xl text-center text-xs font-mono">
                   Decision recorded as <strong className="text-white">{rec?.status}</strong>. Manifest synced.
@@ -328,7 +313,7 @@ export const ControlTowerView: React.FC = () => {
                 className="py-2.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs rounded-xl border border-slate-700 flex items-center justify-center gap-1 transition"
               >
                 <TrendingUp className="w-3.5 h-3.5 text-purple-400" />
-                What-If Sim
+                What-If Sandbox
               </button>
             </div>
           </div>
@@ -368,7 +353,7 @@ export const ControlTowerView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <FileSearch className="w-5 h-5 text-cyan-400" />
                 <h3 className="text-sm font-bold text-white">
-                  Multi-Factor Evidence Bundle • REC-1029
+                  Multi-Factor Evidence Bundle • {rec?.id || 'No active decision'}
                 </h3>
               </div>
               <button
@@ -380,7 +365,7 @@ export const ControlTowerView: React.FC = () => {
             </div>
 
             <p className="text-xs text-slate-300">
-              Explainable AI decision basis used to recommend transferring parcel MY102938 to Train T108:
+              Decision evidence for the selected recommendation:
             </p>
 
             <div className="space-y-2">
@@ -418,7 +403,7 @@ export const ControlTowerView: React.FC = () => {
         </div>
       )}
 
-      {/* What-If Simulation Sandbox Modal */}
+      {/* What-If Sandboxulation Sandbox Modal */}
       {showSimModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-5 shadow-2xl space-y-4">
@@ -426,7 +411,7 @@ export const ControlTowerView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-purple-400" />
                 <h3 className="text-sm font-bold text-white">
-                  Interactive What-If Simulation: Train T105 90m Delay
+                  Interactive What-If Sandboxulation: Train T105 90m Delay
                 </h3>
               </div>
               <button onClick={() => setShowSimModal(false)} className="text-slate-400 hover:text-white">
@@ -450,7 +435,7 @@ export const ControlTowerView: React.FC = () => {
               {/* Alt A */}
               <div className="p-3 rounded-xl bg-cyan-950/40 border-2 border-cyan-500/50 relative">
                 <span className="absolute -top-2 right-2 bg-cyan-500 text-slate-950 text-[9px] font-bold px-1.5 py-0.2 rounded">
-                  AI RECOMMENDED
+                  RECOMMENDED
                 </span>
                 <div className="text-[10px] font-bold uppercase text-cyan-400">Alternative A</div>
                 <div className="text-sm font-bold text-white mt-1">Train T108 Slot</div>
@@ -491,12 +476,12 @@ export const ControlTowerView: React.FC = () => {
                 </button>
                 <button
                   onClick={() => {
-                    approveRecommendation('REC-1029', 'Applied via What-If Simulator');
+                    if (rec?.status === 'Pending Approval') approveRecommendation(rec.id, 'Applied via What-If Sandboxulator');
                     setShowSimModal(false);
                   }}
-                  className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold rounded-lg text-xs"
+                  disabled={rec?.id !== 'REC-1029' || rec?.status !== 'Pending Approval'} className="px-4 py-1.5 bg-cyan-500 hover:bg-cyan-400 disabled:bg-slate-700 disabled:text-slate-400 disabled:cursor-not-allowed text-slate-950 font-bold rounded-lg text-xs"
                 >
-                  Apply Alternative A Recommendation
+                  {rec?.id !== 'REC-1029' ? 'Reference Scenario Only' : rec?.status === 'Pending Approval' ? 'Approve Simulated Recommendation' : 'Decision Already Processed'}
                 </button>
               </div>
             </div>
@@ -504,52 +489,6 @@ export const ControlTowerView: React.FC = () => {
         </div>
       )}
 
-      {showIncidentModal && (
-        <div className="fixed inset-0 z-[90] bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <form
-            onSubmit={(e)=>{
-              e.preventDefault();
-              addIncident({
-                type: incidentType,
-                location: incidentLocation,
-                severity: incidentType === 'Accident' || incidentType === 'Flood' ? 'High' : 'Medium',
-                affectedServiceId: incidentService || undefined,
-                shipmentId: incidentShipment || undefined,
-                transportType: incidentService.toLowerCase().startsWith('t') ? 'Train' : 'Truck',
-                details: incidentDetails,
-              });
-              setShowIncidentModal(false);
-            }}
-            className="w-full max-w-xl rounded-2xl bg-white text-slate-800 border border-slate-200 shadow-2xl p-5 space-y-4"
-          >
-            <div className="flex items-center justify-between">
-              <div><h2 className="text-lg font-extrabold">Manager Incident Console</h2><p className="text-xs text-slate-500">Create an incident, identify affected shipments and calculate reroute factors.</p></div>
-              <button type="button" onClick={()=>setShowIncidentModal(false)}><X className="w-5 h-5"/></button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <label className="font-semibold">Incident Type
-                <select value={incidentType} onChange={(e)=>setIncidentType(e.target.value as any)} className="mt-1 w-full border rounded-lg px-3 py-2">
-                  <option>Flood</option><option>Traffic</option><option>Vehicle Breakdown</option><option>Accident</option><option>Hub Congestion</option><option>Wrong Hub</option>
-                </select>
-              </label>
-              <label className="font-semibold">Affected Service
-                <input value={incidentService} onChange={(e)=>setIncidentService(e.target.value)} placeholder="T105 / TR-909" className="mt-1 w-full border rounded-lg px-3 py-2"/>
-              </label>
-              <label className="font-semibold">Specific Shipment (optional)
-                <input value={incidentShipment} onChange={(e)=>setIncidentShipment(e.target.value.toUpperCase())} placeholder="MY100001" className="mt-1 w-full border rounded-lg px-3 py-2"/>
-              </label>
-              <label className="font-semibold">Location
-                <input value={incidentLocation} onChange={(e)=>setIncidentLocation(e.target.value)} className="mt-1 w-full border rounded-lg px-3 py-2"/>
-              </label>
-              <label className="font-semibold sm:col-span-2">Details
-                <textarea value={incidentDetails} onChange={(e)=>setIncidentDetails(e.target.value)} rows={3} className="mt-1 w-full border rounded-lg px-3 py-2"/>
-              </label>
-            </div>
-            <div className="rounded-xl bg-blue-50 border border-blue-200 p-3 text-xs text-blue-900"><b>Decision factors:</b> ETA • Capacity • Cost • Security • SLA. A consequential reroute will enter the human approval queue.</div>
-            <button className="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-extrabold">Create Incident & Generate Recovery Recommendation</button>
-          </form>
-        </div>
-      )}
     </div>
   );
 };

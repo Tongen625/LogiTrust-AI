@@ -64,14 +64,14 @@ export const ShipmentsView: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-extrabold text-white tracking-wide">
-            Shipment Management & Integrity Directory
+            Network Shipments
           </h1>
           <p className="text-xs text-slate-400">
-            Real-time intermodal consignment tracking with evidence-based chain-of-custody verification
+            Manager-level shipment oversight across status, risk, ETA, AI decisions and specialist evidence.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {['Logistics Operations Manager','Transport Coordinator','Administrator'].includes(userRole) && (
+          {['Logistics Operations Manager','Transport Coordinator'].includes(userRole) && (
             <button
               onClick={() => setShowAddShipment(true)}
               className="px-3 py-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center gap-1.5 shadow"
@@ -93,7 +93,7 @@ export const ShipmentsView: React.FC = () => {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search tracking ID, city, or consignee..."
+            placeholder="Search shipment ID, city, hub, or destination..."
             className="w-full bg-slate-950 border border-slate-750 rounded-xl pl-9 pr-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
           />
         </div>
