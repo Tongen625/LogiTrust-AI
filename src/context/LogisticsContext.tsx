@@ -71,6 +71,8 @@ export const ROLE_ASSIGNABLE_TABS: Record<UserRole, NavigationTab[]> = {
   'Administrator': ['dashboard','users','audit','manager-app'],
 };
 
+const MOBILE_APP_TABS: NavigationTab[] = ['driver-view', 'coordinator-app', 'security-app', 'hub-app', 'manager-app'];
+
 export const ROLE_DEFAULT_TAB: Record<UserRole, NavigationTab> = {
   'Logistics Operations Manager': 'control-tower',
   'Security / Risk Officer': 'security',
@@ -421,6 +423,14 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const setActiveTab = (tab: NavigationTab) => {
+    // Role mobile apps are isolated from the desktop console. If a legacy/global
+    // handler tries to navigate to a web console while an app is open, ignore it.
+    const activeIsMobileApp = MOBILE_APP_TABS.includes(activeTab);
+    const targetIsMobileApp = MOBILE_APP_TABS.includes(tab);
+    if (activeIsMobileApp && !targetIsMobileApp) {
+      return;
+    }
+
     if (!isTabPermitted(tab)) {
       showToast(`⛔ Access Denied: "${userRole}" is not authorized to access "${tab}". Permitted: ${permittedTabs.join(', ')}.`);
       return;
@@ -605,98 +615,153 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const approveRecommendation = (recId: string, notes = 'Rescheduling approved by Operations Manager') => {
     if (!requireRole(['Logistics Operations Manager'], 'approve AI recommendations')) return;
     const rec = recommendations.find((r) => r.id === recId);
-    if (!rec) return;
+    if (!rec) {
+      showToast(`Recommendation ${recId} was not found.`);
+      return;
+    }
+    if (rec.status !== 'Pending Approval') {
+      showToast(`Recommendation ${recId} is already ${rec.status}.`);
+      return;
+    }
+
+    const isOriginalT108Scenario = rec.id === 'REC-1029' || rec.targetService === 'Train T108';
+    const incidentId = rec.incidentId;
 
     setRecommendations((prev) =>
-      prev.map((r) => (r.id === recId ? { ...r, status: 'Approved' } : r))
+      prev.map((r) => (r.id === recId ? { ...r, status: 'Approved', managerNotes: notes } : r))
     );
 
     setShipments((prev) =>
       prev.map((s) => {
-        if (s.id === rec.shipmentId) {
-          const isOriginalT108Scenario = rec.id === 'REC-1029' || rec.targetService === 'Train T108';
-          const targetService = isOriginalT108Scenario
-            ? 'Train T108'
-            : (rec.targetService && rec.targetService !== 'Best Available Alternative' ? rec.targetService : s.assignedVehicleOrTrain);
-          return {
-            ...s,
-            status: 'Route & Schedule Planning',
-            assignedVehicleOrTrain: targetService,
-            eta: isOriginalT108Scenario ? '14:10 (Recovered)' : 'Recalculated after approved recovery plan',
-            riskLevel: 'Low',
-            riskScore: 18,
-            hasPendingApproval: false,
-            delayMinutes: 0,
-            timeline: s.timeline.map((item) =>
-              item.stage === 'Route & Schedule Planning'
-                ? {
-                    ...item,
-                    completed: true,
-                    current: true,
-                    location: isOriginalT108Scenario ? 'Johor Rail Terminal (Bay 4)' : s.currentLocation,
-                    notes: `Recovery plan approved by Operations Manager. ${rec.recommendation}`,
-                    verifiedBy: 'Operations Manager & AI Orchestrator',
-                  }
-                : item
-            ),
-          };
-        }
-        return s;
+        if (s.id !== rec.shipmentId) return s;
+        const targetService = isOriginalT108Scenario
+          ? 'Train T108'
+          : (rec.targetService && rec.targetService !== 'Best Available Alternative'
+            ? rec.targetService
+            : s.assignedVehicleOrTrain);
+        return {
+          ...s,
+          status: 'Route & Schedule Planning',
+          assignedVehicleOrTrain: targetService,
+          eta: isOriginalT108Scenario ? '14:10 (Recovered)' : 'Recalculated after approved recovery plan',
+          riskLevel: s.hasSecurityAlert ? s.riskLevel : 'Low',
+          riskScore: s.hasSecurityAlert ? s.riskScore : 18,
+          hasPendingApproval: false,
+          delayMinutes: 0,
+          timeline: s.timeline.map((item) =>
+            item.stage === 'Route & Schedule Planning'
+              ? {
+                  ...item,
+                  completed: true,
+                  current: true,
+                  location: isOriginalT108Scenario ? 'Johor Rail Terminal (Bay 4)' : s.currentLocation,
+                  notes: `Recovery plan approved by Operations Manager. ${rec.recommendation}`,
+                  verifiedBy: 'Operations Manager & AI Orchestrator',
+                }
+              : item
+          ),
+        };
       })
     );
+
+    if (incidentId) {
+      setIncidents((prev) => prev.map((incident) => incident.id === incidentId ? {
+        ...incident,
+        status: 'Resolved',
+        requiresApproval: false,
+        resolution: `Manager approved ${recId}. ${rec.recommendation}`,
+      } : incident));
+    }
 
     setAgents((prev) =>
       prev.map((a) => {
         if (a.name === 'Decision Agent') {
-          return { ...a, status: 'Completed', currentTask: 'Recommendation REC-1029 approved and executed' };
+          return { ...a, status: 'Completed', currentTask: `${recId} approved by Operations Manager and released for execution` };
         }
         if (a.name === 'Scheduling Agent') {
-          return { ...a, status: 'Monitoring', currentTask: 'Train T108 manifest updated. Slot locked.' };
+          return { ...a, status: 'Monitoring', currentTask: `Monitoring approved recovery for ${rec.shipmentId}` };
+        }
+        if (a.name === 'Disruption Agent') {
+          return { ...a, status: 'Monitoring', currentTask: `Monitoring post-recovery conditions for ${rec.shipmentId}` };
         }
         return a;
       })
     );
 
     logAudit(
-      'Operations Manager (User)',
+      currentUser.name,
       userRole,
-      `AI Recommendation Approved: ${rec.recommendation}`,
-      `Verified Train T108 capacity (54% load) & 45m hub transfer window. Notes: ${notes}`,
-      'AI Recommendation REC-1029: Transfer MY102938 from T105 to T108',
-      'APPROVED',
-      rec.id === 'REC-1029' ? 'Shipment MY102938 assigned to Train T108. Arrival improved by 74 min (14:10). Destination Hub transfer SLA preserved.' : `Recovery plan applied to shipment ${rec.shipmentId}; route/schedule returned to human-governed planning.`,
+      `AI Recommendation Approved: ${recId}`,
+      `${rec.detectedEvent || 'Operational exception'} | Manager notes: ${notes}`,
+      rec.recommendation,
+      'APPROVED BY OPERATIONS MANAGER',
+      isOriginalT108Scenario
+        ? `Shipment ${rec.shipmentId} assigned to Train T108. Arrival recovered to 14:10.`
+        : `Approved recovery plan executed for shipment ${rec.shipmentId}.`,
       rec.shipmentId
     );
 
-    showToast(rec.id === 'REC-1029' ? `✅ Human Approval Recorded: Shipment ${rec.shipmentId} transferred to Train T108! Arrival recovered to 14:10.` : `✅ Recovery plan approved for ${rec.shipmentId}. Execution and audit trail updated.`);
+    showToast(isOriginalT108Scenario
+      ? `Human approval recorded: ${rec.shipmentId} transferred to Train T108 and ETA recovered to 14:10.`
+      : `Recovery plan ${recId} approved and executed for ${rec.shipmentId}.`);
   };
 
   // 4. REJECT RECOMMENDATION
-  const rejectRecommendation = (recId: string, reason = 'Operator decided to hold') => {
+  const rejectRecommendation = (recId: string, reason = 'Manager decided to retain the current plan') => {
     if (!requireRole(['Logistics Operations Manager'], 'reject AI recommendations')) return;
-    setRecommendations((prev) =>
-      prev.map((r) => (r.id === recId ? { ...r, status: 'Rejected' } : r))
-    );
-
     const rec = recommendations.find((r) => r.id === recId);
-    if (rec) {
-      setShipments((prev) =>
-        prev.map((s) => (s.id === rec.shipmentId ? { ...s, hasPendingApproval: false } : s))
-      );
+    if (!rec) {
+      showToast(`Recommendation ${recId} was not found.`);
+      return;
+    }
+    if (rec.status !== 'Pending Approval') {
+      showToast(`Recommendation ${recId} is already ${rec.status}.`);
+      return;
     }
 
-    logAudit(
-      'Operations Manager (User)',
-      userRole,
-      `AI Recommendation Rejected`,
-      `Reason: ${reason}`,
-      `AI Recommended transfer to T108`,
-      'REJECTED',
-      'Original schedule retained. Manual oversight logged.',
-      rec?.shipmentId
+    setRecommendations((prev) =>
+      prev.map((r) => (r.id === recId ? { ...r, status: 'Rejected', managerNotes: reason } : r))
     );
 
-    showToast(`Recommendation ${recId} rejected. Baseline schedule maintained.`);
+    setShipments((prev) =>
+      prev.map((s) => (s.id === rec.shipmentId ? { ...s, hasPendingApproval: false } : s))
+    );
+
+    if (rec.incidentId) {
+      setIncidents((prev) => prev.map((incident) => incident.id === rec.incidentId ? {
+        ...incident,
+        status: 'Analysing',
+        requiresApproval: false,
+        resolution: undefined,
+      } : incident));
+    }
+
+    setAgents((prev) => prev.map((a) => {
+      if (a.name === 'Decision Agent') {
+        return { ...a, status: 'Action Required', currentTask: `${recId} rejected by Manager; Transport Coordinator must revise or retain baseline plan` };
+      }
+      if (a.name === 'Scheduling Agent') {
+        return { ...a, status: 'Analysing', currentTask: `Reassessing alternatives for ${rec.shipmentId} after manager rejection` };
+      }
+      return a;
+    }));
+
+    logAudit(
+      currentUser.name,
+      userRole,
+      `AI Recommendation Rejected: ${recId}`,
+      `Reason: ${reason}`,
+      rec.recommendation,
+      'REJECTED BY OPERATIONS MANAGER',
+      rec.incidentId
+        ? 'Recommendation returned to Transport Coordinator for revised operational review.'
+        : 'Baseline schedule retained and human oversight recorded.',
+      rec.shipmentId
+    );
+
+    showToast(rec.incidentId
+      ? `${recId} rejected. Case returned to Transport Coordinator for revised review.`
+      : `${recId} rejected. Baseline schedule retained.`);
   };
 
   // 5. REQUEST DRIVER VERIFICATION
@@ -938,7 +1003,7 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
 
   const addShipment = (input: Partial<Shipment> & { id?: string }) => {
-    if (!requireRole(['Logistics Operations Manager', 'Transport Coordinator'], 'add operational shipments')) return;
+    if (!requireRole(['Transport Coordinator'], 'add operational shipments')) return;
 
     const id = input.id?.trim().toUpperCase() || `MY${Math.floor(100000 + Math.random() * 899999)}`;
     if (shipments.some((s) => s.id === id)) {
@@ -1014,7 +1079,7 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     shipmentId?: string;
     details: string;
   }) => {
-    if (!requireRole(['Logistics Operations Manager', 'Transport Coordinator', 'Hub Operator', 'Driver', 'Security / Risk Officer'], 'report incidents')) return;
+    if (!requireRole(['Transport Coordinator', 'Hub Operator', 'Driver', 'Security / Risk Officer'], 'report incidents')) return;
 
     const affected = shipments.filter((s) => {
       if (input.shipmentId && s.id === input.shipmentId) return true;
@@ -1274,7 +1339,7 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const resolveIncident = (incidentId: string, resolution = 'Incident reviewed and operational recovery completed') => {
-    if (!requireRole(['Logistics Operations Manager', 'Transport Coordinator', 'Hub Operator', 'Security / Risk Officer'], 'resolve incidents')) return;
+    if (!requireRole(['Transport Coordinator', 'Hub Operator', 'Security / Risk Officer'], 'resolve incidents')) return;
     const incident = incidents.find((i) => i.id === incidentId);
     if (!incident) return;
     setIncidents((prev) => prev.map((i) => i.id === incidentId ? { ...i, status: 'Resolved', resolution } : i));
