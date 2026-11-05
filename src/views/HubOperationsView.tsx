@@ -17,6 +17,37 @@ import {
   Upload,
 } from 'lucide-react';
 
+
+type HubReportType =
+  | 'Receiving Problem'
+  | 'Manifest Mismatch'
+  | 'Handoff / Custody Issue'
+  | 'Sorting / Outbound Problem'
+  | 'Hub Congestion'
+  | 'Other Hub Issue';
+
+const HUB_REPORT_INCIDENT_TYPE: Record<HubReportType, 'Invalid Scan' | 'Missing Parcel' | 'Hub Congestion'> = {
+  'Receiving Problem': 'Invalid Scan',
+  'Manifest Mismatch': 'Missing Parcel',
+  'Handoff / Custody Issue': 'Invalid Scan',
+  'Sorting / Outbound Problem': 'Invalid Scan',
+  'Hub Congestion': 'Hub Congestion',
+  'Other Hub Issue': 'Invalid Scan',
+};
+
+const hubAgentForIncident = (type: string, details = ''): string | null => {
+  const label = details.match(/^\[([^\]]+)\]/)?.[1] || '';
+  if (label === 'Sorting / Outbound Problem') return null;
+  if (type === 'Hub Congestion') return 'Disruption + Scheduling + Decision Agents';
+  if (type === 'Wrong Hub') return 'Trust / Handoff + Scheduling + Decision Agents';
+  if (type === 'Route Deviation') return 'Route Risk Agent';
+  if (
+    ['Missing Parcel', 'Invalid Scan'].includes(type)
+    || ['Receiving Problem', 'Manifest Mismatch', 'Handoff / Custody Issue', 'Other Hub Issue'].includes(label)
+  ) return 'Trust / Handoff Agent';
+  return 'Relevant Agent';
+};
+
 const shipmentIdFromParcelId = (parcelId: string) => {
   const match = parcelId.match(/^P-(MY\d+)-/);
   return match?.[1] || parcelId.replace(/^P-/, '').replace(/-\d+$/, '');
@@ -47,6 +78,12 @@ export const HubOperationsView: React.FC = () => {
   const [receivingManifestId, setReceivingManifestId] = useState('');
   const [scanParcel, setScanParcel] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [showReportException, setShowReportException] = useState(false);
+  const [reportType, setReportType] = useState<HubReportType>('Receiving Problem');
+  const [reportServiceId, setReportServiceId] = useState('');
+  const [reportShipmentId, setReportShipmentId] = useState('');
+  const [reportSeverity, setReportSeverity] = useState<'Low' | 'Medium' | 'High'>('Medium');
+  const [reportDetails, setReportDetails] = useState('');
 
   const show = (message: string) => {
     setNotice(message);
@@ -171,6 +208,11 @@ export const HubOperationsView: React.FC = () => {
     (incident) => incident.affectedHubId === hub.id && incident.type === 'Wrong Hub' && incident.status !== 'Resolved'
   ).length;
 
+  const latestHubIncident = incidents.find((incident) => incident.affectedHubId === hub.id);
+  const latestHubAgent = latestHubIncident
+    ? hubAgentForIncident(latestHubIncident.type, latestHubIncident.details)
+    : null;
+
   const handleScan = () => {
     if (!selectedReceivingManifest) {
       show('Select a load that has arrived at the hub.');
@@ -231,6 +273,39 @@ export const HubOperationsView: React.FC = () => {
       details: `${parcelId} custody record ${handoffId} requires a fresh identity / parcel / location scan before custody can be accepted.`,
     });
     show(`${parcelId} re-scan requested.`);
+  };
+
+  const reportHubException = () => {
+    const details = reportDetails.trim();
+    if (!details) {
+      show('Add a short description before reporting the hub exception.');
+      return;
+    }
+
+    const relatedManifest = hubManifests.find((manifest) => manifest.serviceId === reportServiceId);
+    addIncident({
+      type: HUB_REPORT_INCIDENT_TYPE[reportType],
+      location: hub.name,
+      severity: reportSeverity,
+      shipmentId: reportShipmentId.trim() || undefined,
+      affectedHubId: hub.id,
+      affectedServiceId: reportServiceId || undefined,
+      transportType: relatedManifest?.transportType,
+      details: `[${reportType}] ${details}`,
+    });
+
+    show(
+      reportType === 'Hub Congestion'
+        ? `${reportType} reported. Transport impact analysis started for Transport Coordinator review.`
+        : reportType === 'Sorting / Outbound Problem'
+        ? `${reportType} reported. This remains with Hub Operator for local correction.`
+        : `${reportType} reported. Trust / Handoff Agent analysis started.`
+    );
+    setReportServiceId('');
+    setReportShipmentId('');
+    setReportSeverity('Medium');
+    setReportDetails('');
+    setShowReportException(false);
   };
 
   const preparingOutgoing = outgoingAll.filter((manifest) => manifest.hubStatus === 'Preparing Dispatch');
@@ -472,19 +547,103 @@ export const HubOperationsView: React.FC = () => {
       </section>
 
       <section id="hub-exceptions" className="scroll-mt-24 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 mb-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
             <h2 className="text-sm font-bold text-slate-900">Receiving Exceptions</h2>
           </div>
-          <select value={exceptionFilter} onChange={(event) => setExceptionFilter(event.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700">
-            <option value="ALL">All Exception Types</option>
-            <option value="MISSING">Missing</option>
-            <option value="UNEXPECTED">Unexpected</option>
-            <option value="WRONG_HUB">Wrong Hub</option>
-            <option value="HANDOFF">Handoff Review</option>
-          </select>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <select value={exceptionFilter} onChange={(event) => setExceptionFilter(event.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-700">
+              <option value="ALL">All Exception Types</option>
+              <option value="MISSING">Missing</option>
+              <option value="UNEXPECTED">Unexpected</option>
+              <option value="WRONG_HUB">Wrong Hub</option>
+              <option value="HANDOFF">Handoff Review</option>
+            </select>
+            <button
+              onClick={() => setShowReportException((current) => !current)}
+              className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold"
+            >
+              {showReportException ? 'Close Report' : 'Report Hub Exception'}
+            </button>
+          </div>
         </div>
+
+        {showReportException && (
+          <div className="mb-4 rounded-xl border border-rose-200 bg-rose-50/60 p-4">
+            <div className="text-xs font-bold text-slate-900 mb-3">Report Hub Exception</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+              <select value={reportType} onChange={(event) => setReportType(event.target.value as HubReportType)} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700">
+                <option>Receiving Problem</option>
+                <option>Manifest Mismatch</option>
+                <option>Handoff / Custody Issue</option>
+                <option>Sorting / Outbound Problem</option>
+                <option>Hub Congestion</option>
+                <option>Other Hub Issue</option>
+              </select>
+              <select value={reportServiceId} onChange={(event) => setReportServiceId(event.target.value)} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700">
+                <option value="">No related load / service</option>
+                {hubManifests
+                  .filter((manifest) => manifest.hubId === hub.id)
+                  .map((manifest) => (
+                    <option key={manifest.id} value={manifest.serviceId}>{manifest.serviceId} · {manifest.transportType}</option>
+                  ))}
+              </select>
+              <input
+                value={reportShipmentId}
+                onChange={(event) => setReportShipmentId(event.target.value)}
+                placeholder="Shipment ID (optional)"
+                className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-rose-400"
+              />
+              <select value={reportSeverity} onChange={(event) => setReportSeverity(event.target.value as 'Low' | 'Medium' | 'High')} className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700">
+                <option value="Low">Low Severity</option>
+                <option value="Medium">Medium Severity</option>
+                <option value="High">High Severity</option>
+              </select>
+            </div>
+            <textarea
+              value={reportDetails}
+              onChange={(event) => setReportDetails(event.target.value)}
+              placeholder="Describe what happened, where it was found, and what is currently affected."
+              rows={3}
+              className="mt-2 w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-rose-400 resize-none"
+            />
+            <div className="mt-3 flex justify-end gap-2">
+              <button onClick={() => setShowReportException(false)} className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-xs font-bold">Cancel</button>
+              <button onClick={reportHubException} className="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold">Submit Exception</button>
+            </div>
+          </div>
+        )}
+
+        {latestHubIncident && latestHubAgent && (
+          <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50/70 p-4">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-cyan-700">Automatic Agent Analysis</div>
+                <div className="mt-1 text-sm font-bold text-slate-900">{latestHubAgent}</div>
+                <div className="mt-1 text-xs text-slate-600">
+                  {latestHubIncident.type} · {latestHubIncident.status} · {latestHubIncident.severity}
+                </div>
+              </div>
+              <div className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-[11px] text-cyan-800">
+                {latestHubIncident.type === 'Hub Congestion' || latestHubIncident.type === 'Wrong Hub'
+                  ? 'Next owner: Transport Coordinator. Manager is involved only if the selected recovery is a consequential transport change.'
+                  : 'AI analyses evidence only. Hub Operator still confirms, re-scans or escalates when required.'}
+              </div>
+            </div>
+            <div className="mt-3 grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="text-[10px] font-bold uppercase text-slate-500">Reported Evidence</div>
+                <div className="mt-1 text-xs text-slate-700 leading-relaxed">{latestHubIncident.details}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="text-[10px] font-bold uppercase text-slate-500">Agent Recommendation</div>
+                <div className="mt-1 text-xs text-slate-700 leading-relaxed">{latestHubIncident.recommendation}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           {(exceptionFilter === 'ALL' || exceptionFilter === 'MISSING') && <div className="p-3 rounded-xl border border-rose-200 bg-rose-50"><div className="text-[10px] text-slate-500">Confirmed Missing</div><div className="text-xl font-bold text-rose-700">{confirmedMissing.length}</div></div>}
           {(exceptionFilter === 'ALL' || exceptionFilter === 'UNEXPECTED') && <div className="p-3 rounded-xl border border-amber-200 bg-amber-50"><div className="text-[10px] text-slate-500">Unexpected</div><div className="text-xl font-bold text-amber-700">{confirmedUnexpected.length}</div></div>}
