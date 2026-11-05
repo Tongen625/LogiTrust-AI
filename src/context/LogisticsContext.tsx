@@ -155,31 +155,107 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [securityAlerts, setSecurityAlerts] = useState<SecurityAlert[]>(INITIAL_SECURITY_ALERTS);
   const [handoffs, setHandoffs] = useState<HubHandoffVerification[]>([...HUB_DEMO_HANDOFFS]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([...INITIAL_AUDIT_LOGS, ...HUB_DEMO_AUDIT_LOGS]);
-  const [incidents, setIncidents] = useState<LogisticsIncident[]>([
+  const INITIAL_MOCK_INCIDENTS: LogisticsIncident[] = [
     {
-      id: 'INC-1001',
+      id: 'INC-MOCK-001',
+      type: 'Invalid Scan',
+      category: 'Parcel',
+      occurredAt: '10:44 Today',
+      location: 'Johor Bahru Southern Region Hub',
+      severity: 'Medium',
+      status: 'Analysing',
+      createdBy: 'Hub Operator',
+      details: '[Manifest Mismatch] Receiving reconciliation for FD-610 found one expected parcel not yet reconciled against the manifest.',
+      transportType: 'Truck',
+      affectedServiceId: 'FD-610',
+      affectedHubId: 'hub-jb',
+      shipmentId: 'MY410102',
+      affectedShipmentIds: ['MY410102'],
+      recommendation: 'Trust / Handoff Agent should reconcile manifest and scan evidence. Hub Operator should re-scan or confirm the mismatch before escalation.',
+      decisionFactors: {
+        etaImpact: 'Local receiving review; no route change yet',
+        capacity: 'No transport capacity action required',
+        cost: 'Local hub handling only',
+        security: 'Custody evidence verification required',
+        sla: 'Monitor only if receiving review causes delay',
+      },
+      requiresApproval: false,
+    },
+    {
+      id: 'INC-MOCK-002',
+      type: 'Wrong Hub',
+      category: 'Hub',
+      occurredAt: '11:06 Today',
+      location: 'Johor Bahru Southern Region Hub',
+      severity: 'High',
+      status: 'Analysing',
+      createdBy: 'Hub Operator',
+      details: 'P-MY410115-01 was scanned at Johor Bahru but is not planned for this hub. Parcel is held for recovery routing.',
+      transportType: 'Truck',
+      affectedServiceId: 'TR-991',
+      affectedHubId: 'hub-jb',
+      shipmentId: 'MY410115',
+      affectedShipmentIds: ['MY410115'],
+      recommendation: 'Transport Coordinator should review the planned destination and choose a feasible recovery service. Manager approval is only needed if the recovery becomes a major consequential change.',
+      decisionFactors: {
+        etaImpact: 'Recovery ETA must be recalculated',
+        capacity: 'Check next service capacity to the planned hub',
+        cost: 'Compare normal recovery vs major reroute cost',
+        security: 'Keep parcel on hold until route and custody are verified',
+        sla: 'Coordinator checks whether recovery still meets target arrival',
+      },
+      requiresApproval: false,
+    },
+    {
+      id: 'INC-MOCK-003',
+      type: 'Hub Congestion',
+      category: 'Hub',
+      occurredAt: '11:18 Today',
+      location: 'Johor Bahru Southern Region Hub',
+      severity: 'High',
+      status: 'Analysing',
+      createdBy: 'Hub Operator',
+      details: 'Hub utilisation exceeded the operating threshold. Sorting and outbound queues may affect Train T112 departure readiness.',
+      transportType: 'Train',
+      affectedServiceId: 'T112',
+      affectedHubId: 'hub-jb',
+      affectedShipmentIds: ['MY410113', 'MY410114'],
+      recommendation: 'Transport Coordinator should review departure slot, available capacity and re-slot options. Escalate to Manager only if a major reroute or material schedule change is selected.',
+      decisionFactors: {
+        etaImpact: 'MY410113 and MY410114 may miss planned outbound timing',
+        capacity: 'Review T112 and alternate service capacity',
+        cost: 'Prefer re-slotting before costly diversion',
+        security: 'Maintain custody controls during any re-planning',
+        sla: 'Check both shipments before changing the transport plan',
+      },
+      requiresApproval: false,
+    },
+    {
+      id: 'INC-MOCK-004',
       type: 'Train Delay',
       category: 'Transport',
       occurredAt: '10:02 Today',
       location: 'Kluang mainline corridor',
       severity: 'High',
-      status: 'Pending Approval',
+      status: 'Analysing',
       createdBy: 'Transport Coordinator',
-      details: 'Train T105 delayed 90 minutes after provider phone update.',
+      details: 'Train T105 delayed 90 minutes after manual provider status update.',
       transportType: 'Train',
       affectedServiceId: 'T105',
       affectedShipmentIds: ['MY102938', 'MY309812', 'MY287611'],
-      recommendation: 'Transfer priority shipment MY102938 to Train T108; hold or re-plan remaining cargo based on SLA.',
+      recommendation: 'Disruption, Scheduling and Decision Agents compare T108, continue T105 and road hotshot. Coordinator reviews the recovery option before any approval request.',
       decisionFactors: {
         etaImpact: 'T105 ETA 16:00 vs T108 ETA 14:10',
         capacity: 'T108 has 46% unallocated capacity',
         cost: '+4% marginal vs +65% road hotshot',
-        security: 'Low risk; custody chain retained',
-        sla: 'T108 preserves destination hub SLA',
+        security: 'Low route risk; preserve custody chain',
+        sla: 'T108 can preserve the priority shipment SLA',
       },
-      requiresApproval: true,
+      requiresApproval: false,
     },
-  ]);
+  ];
+
+  const [incidents, setIncidents] = useState<LogisticsIncident[]>(INITIAL_MOCK_INCIDENTS);
   const [hubManifests, setHubManifests] = useState<HubManifest[]>([
     {
       id: 'MAN-T105-PJ',
@@ -1202,7 +1278,7 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setSecurityAlerts(INITIAL_SECURITY_ALERTS);
     setHandoffs([...HUB_DEMO_HANDOFFS]);
     setAuditLogs([...INITIAL_AUDIT_LOGS, ...HUB_DEMO_AUDIT_LOGS]);
-    setIncidents([]);
+    setIncidents(INITIAL_MOCK_INCIDENTS);
     setHubManifests([
       {
         id: 'MAN-T105-PJ',
