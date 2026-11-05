@@ -118,6 +118,8 @@ export const SchedulesView: React.FC = () => {
   const [trainStatus, setTrainStatus] = useState<UnifiedServiceStatus>('On Time');
   const [trainDelayMinutes, setTrainDelayMinutes] = useState(0);
   const [trainStatusNote, setTrainStatusNote] = useState('Manual provider status update');
+  const [roadStatusOverrides, setRoadStatusOverrides] = useState<Record<string, { status: UnifiedServiceStatus; delayMinutes: number; note: string }>>({});
+  const [selectedIncidentId, setSelectedIncidentId] = useState<string>('');
 
   const services = useMemo<UnifiedService[]>(() => {
     const trainRows: UnifiedService[] = trainSchedules.map((train) => ({
@@ -146,8 +148,8 @@ export const SchedulesView: React.FC = () => {
       destinationHub: service.destinationHub,
       departure: service.departure,
       arrival: service.arrival,
-      status: service.status,
-      delayMinutes: service.delayMinutes,
+      status: roadStatusOverrides[service.id]?.status || service.status,
+      delayMinutes: roadStatusOverrides[service.id]?.delayMinutes ?? service.delayMinutes,
       utilisationPct: service.utilisationPct,
       capacityAvailable: service.capacityAvailable,
       affectedShipmentIds: service.affectedShipmentIds,
@@ -156,7 +158,7 @@ export const SchedulesView: React.FC = () => {
     }));
 
     return [...trainRows, ...roadRows];
-  }, [trainSchedules, shipments]);
+  }, [trainSchedules, shipments, roadStatusOverrides]);
 
   const visibleServices = useMemo(() => {
     const normalized = query.trim().toLowerCase();
@@ -175,24 +177,53 @@ export const SchedulesView: React.FC = () => {
     return incidents.filter((incident) => incident.affectedServiceId === selectedService.id && incident.status !== 'Resolved');
   }, [incidents, selectedService]);
 
+  const selectedIncident = useMemo(() => {
+    if (selectedIncidentId) {
+      const found = incidents.find((incident) => incident.id === selectedIncidentId && incident.status !== 'Resolved');
+      if (found) return found;
+    }
+    return selectedIncidents[0];
+  }, [incidents, selectedIncidentId, selectedIncidents]);
+
+  const reviewService = useMemo(() => {
+    if (selectedIncident?.affectedServiceId) {
+      return services.find((service) => service.id === selectedIncident.affectedServiceId) || selectedService;
+    }
+    return selectedService;
+  }, [services, selectedIncident, selectedService]);
+
   const selectedRecommendations = useMemo(() => {
-    if (!selectedService) return [];
-    const affected = new Set(selectedService.affectedShipmentIds);
+    if (!reviewService) return [];
+    const affected = new Set(selectedIncident?.affectedShipmentIds?.length ? selectedIncident.affectedShipmentIds : reviewService.affectedShipmentIds);
     return recommendations.filter((recommendation: any) =>
       affected.has(recommendation.shipmentId) && ['Coordinator Review', 'Pending Approval'].includes(recommendation.status)
     );
-  }, [recommendations, selectedService]);
+  }, [recommendations, reviewService, selectedIncident]);
 
   const alternativeServices = useMemo(() => {
-    if (!selectedService) return [];
-    return services
-      .filter((service) => service.id !== selectedService.id)
+    if (!reviewService) return [];
+    const sameDirection = (service: UnifiedService) =>
+      service.originHub === reviewService.originHub && service.destinationHub === reviewService.destinationHub;
+    const sameCorridor = (service: UnifiedService) =>
+      service.originHub === reviewService.originHub || service.destinationHub === reviewService.destinationHub;
+
+    const exact = services
+      .filter((service) => service.id !== reviewService.id)
       .filter((service) => service.status !== 'Cancelled')
       .filter((service) => service.capacityAvailable && service.utilisationPct < 95)
-      .filter((service) => service.transportType === selectedService.transportType || selectedService.status === 'Delayed' || selectedService.status === 'Cancelled')
-      .sort((a, b) => a.utilisationPct - b.utilisationPct)
-      .slice(0, 3);
-  }, [services, selectedService]);
+      .filter(sameDirection)
+      .sort((a, b) => a.utilisationPct - b.utilisationPct);
+
+    const corridor = services
+      .filter((service) => service.id !== reviewService.id)
+      .filter((service) => service.status !== 'Cancelled')
+      .filter((service) => service.capacityAvailable && service.utilisationPct < 95)
+      .filter((service) => !exact.some((exactService) => exactService.id === service.id))
+      .filter(sameCorridor)
+      .sort((a, b) => a.utilisationPct - b.utilisationPct);
+
+    return [...exact, ...corridor].slice(0, 3);
+  }, [services, reviewService]);
 
   const stats = useMemo(() => ({
     services: services.length,
@@ -250,18 +281,29 @@ export const SchedulesView: React.FC = () => {
     setNewTrainId('');
   };
 
-  const openTrainStatusEditor = (service: UnifiedService) => {
-    if (!service.originalTrain) return;
+  const openServiceStatusEditor = (service: UnifiedService) => {
     setSelectedServiceId(service.id);
     setTrainStatus(service.status);
     setTrainDelayMinutes(service.delayMinutes || 0);
-    setTrainStatusNote(service.originalTrain.notes || 'Manual provider status update');
+    setTrainStatusNote(
+      service.originalTrain?.notes ||
+      roadStatusOverrides[service.id]?.note ||
+      (service.transportType === 'Train' ? 'Manual provider status update' : 'Fleet operations status update')
+    );
     setShowTrainStatusModal(true);
   };
 
-  const saveTrainStatus = () => {
-    if (!selectedService?.originalTrain) return;
-    updateTrainStatus(selectedService.id, trainStatus, trainStatus === 'Delayed' ? trainDelayMinutes : 0, trainStatusNote);
+  const saveServiceStatus = () => {
+    if (!selectedService) return;
+    const delay = trainStatus === 'Delayed' ? trainDelayMinutes : 0;
+    if (selectedService.originalTrain) {
+      updateTrainStatus(selectedService.id, trainStatus, delay, trainStatusNote);
+    } else {
+      setRoadStatusOverrides((prev) => ({
+        ...prev,
+        [selectedService.id]: { status: trainStatus, delayMinutes: delay, note: trainStatusNote },
+      }));
+    }
     setShowTrainStatusModal(false);
   };
 
@@ -315,7 +357,7 @@ export const SchedulesView: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_0.9fr] gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-[1.75fr_0.65fr] gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-200">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -323,7 +365,7 @@ export const SchedulesView: React.FC = () => {
                 <h2 className="text-lg font-bold">Transport Services</h2>
                 <p className="text-xs text-slate-500 mt-1">Train, truck and intermodal schedules managed across the network.</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-[240px_150px_150px] gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-[220px_135px_135px] gap-2">
                 <div className="relative">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search service or route" className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs outline-none focus:border-blue-400" />
@@ -349,22 +391,22 @@ export const SchedulesView: React.FC = () => {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[820px] text-sm">
               <thead className="bg-slate-50 text-xs text-slate-500 border-b border-slate-200">
                 <tr>
-                  <th className="text-left px-4 py-3">Service</th>
-                  <th className="text-left px-4 py-3">Route</th>
-                  <th className="text-left px-4 py-3">Schedule</th>
-                  <th className="text-left px-4 py-3">Status</th>
-                  <th className="text-left px-4 py-3">Capacity</th>
-                  <th className="text-left px-4 py-3">Shipments</th>
-                  <th className="text-right px-4 py-3">Action</th>
+                  <th className="text-left px-3 py-3">Service</th>
+                  <th className="text-left px-3 py-3">Route</th>
+                  <th className="text-left px-3 py-3">Schedule</th>
+                  <th className="text-left px-3 py-3">Status</th>
+                  <th className="text-left px-3 py-3">Capacity</th>
+                  <th className="text-left px-3 py-3">Shipments</th>
+                  <th className="text-right px-3 py-3">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {visibleServices.map((service) => (
                   <tr key={service.id} className={cx('hover:bg-slate-50 transition', selectedService?.id === service.id && 'bg-blue-50/60')}>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <button onClick={() => setSelectedServiceId(service.id)} className="text-left">
                         <div className="flex items-center gap-2 font-semibold text-slate-900">
                           <span className="w-8 h-8 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-700">{transportIcon(service.transportType)}</span>
@@ -373,22 +415,22 @@ export const SchedulesView: React.FC = () => {
                         <div className="text-[11px] text-slate-500 mt-1 ml-10">{service.transportType} · {service.dataSource}</div>
                       </button>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-3">
                       <div className="font-medium text-slate-800">{service.route}</div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-600">
+                    <td className="px-3 py-3 text-xs text-slate-600">
                       <div>{service.departure} <ArrowRight className="w-3 h-3 inline mx-1" /> {service.arrival}</div>
                       {service.delayMinutes > 0 && <div className="text-amber-700 mt-1">+{service.delayMinutes} min delay</div>}
                     </td>
-                    <td className="px-4 py-3"><span className={cx('rounded-full border px-2.5 py-1 text-xs font-semibold', statusClass[service.status])}>{service.status}</span></td>
-                    <td className="px-4 py-3 min-w-[150px]">
+                    <td className="px-3 py-3"><span className={cx('rounded-full border px-2.5 py-1 text-xs font-semibold', statusClass[service.status])}>{service.status}</span></td>
+                    <td className="px-3 py-3 min-w-[120px]">
                       <div className="flex items-center justify-between text-xs mb-1"><span className="text-slate-500">{capacityLabel(service.utilisationPct)}</span><span className="font-semibold text-slate-800">{service.utilisationPct}%</span></div>
                       <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden"><div className={cx('h-full rounded-full', capacityClass(service.utilisationPct))} style={{ width: `${Math.min(service.utilisationPct, 100)}%` }} /></div>
                     </td>
-                    <td className="px-4 py-3"><span className="font-semibold text-slate-900">{service.affectedShipmentIds.length}</span></td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-3 py-3"><span className="font-semibold text-slate-900">{service.affectedShipmentIds.length}</span></td>
+                    <td className="px-3 py-3 text-right">
                       <div className="flex justify-end gap-2">
-                        {service.isTrain && canEdit && <button onClick={() => openTrainStatusEditor(service)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50">Update Status</button>}
+                        {canEdit && <button onClick={() => openServiceStatusEditor(service)} className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50">Update Status</button>}
                         {canEdit && <button onClick={() => openIncidentModal(service)} className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-xs font-medium text-rose-700 hover:bg-rose-50">Report Incident</button>}
                       </div>
                     </td>
@@ -402,7 +444,7 @@ export const SchedulesView: React.FC = () => {
         <div className="space-y-5">
           {selectedService ? (
             <>
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-xs font-medium text-slate-500">Selected Service</div>
@@ -412,7 +454,7 @@ export const SchedulesView: React.FC = () => {
                   <span className={cx('rounded-full border px-2.5 py-1 text-xs font-semibold', statusClass[selectedService.status])}>{selectedService.status}</span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 mt-4 text-sm">
+                <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs text-slate-500">Departure</div><div className="font-semibold mt-1">{selectedService.departure}</div></div>
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs text-slate-500">Arrival</div><div className="font-semibold mt-1">{selectedService.arrival}</div></div>
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs text-slate-500">Utilisation</div><div className="font-semibold mt-1">{selectedService.utilisationPct}% · {capacityLabel(selectedService.utilisationPct)}</div></div>
@@ -450,7 +492,7 @@ export const SchedulesView: React.FC = () => {
           </div>
           <div className="divide-y divide-slate-100">
             {incidents.filter((incident) => incident.category === 'Transport' && incident.status !== 'Resolved').slice(0, 6).map((incident) => (
-              <div key={incident.id} className="p-4">
+              <button type="button" key={incident.id} onClick={() => { setSelectedIncidentId(incident.id); if (incident.affectedServiceId) setSelectedServiceId(incident.affectedServiceId); }} className={cx('w-full p-4 text-left transition hover:bg-slate-50', selectedIncident?.id === incident.id && 'bg-blue-50/70')}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-600" /><span className="font-semibold text-slate-900">{incident.type}</span>{incident.affectedServiceId && <span className="text-xs font-mono text-blue-700">{incident.affectedServiceId}</span>}</div>
@@ -463,7 +505,7 @@ export const SchedulesView: React.FC = () => {
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-2.5"><span className="text-slate-500">Affected shipments</span><div className="font-semibold text-slate-900 mt-1">{incident.affectedShipmentIds.length}</div></div>
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-2.5"><span className="text-slate-500">Approval</span><div className="font-semibold text-slate-900 mt-1">{incident.requiresApproval ? 'Pending Manager approval' : incident.category === 'Transport' || incident.type === 'Hub Congestion' || incident.type === 'Wrong Hub' ? 'Coordinator review first' : 'Operational handling'}</div></div>
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -474,11 +516,11 @@ export const SchedulesView: React.FC = () => {
             <p className="text-xs text-slate-500 mt-1">Available capacity options for the selected disrupted or constrained service.</p>
           </div>
 
-          {selectedService && (selectedService.status === 'Delayed' || selectedService.status === 'Cancelled' || selectedService.utilisationPct >= 80 || selectedIncidents.length > 0) ? (
+          {reviewService && (reviewService.status === 'Delayed' || reviewService.status === 'Cancelled' || reviewService.utilisationPct >= 80 || Boolean(selectedIncident)) ? (
             <div className="p-4 space-y-3">
               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                 <div className="text-xs font-semibold text-amber-800">Why review alternatives?</div>
-                <div className="text-sm text-amber-900 mt-1">{selectedService.id} is {selectedService.status.toLowerCase()} {selectedService.utilisationPct >= 80 ? `and at ${selectedService.utilisationPct}% utilisation` : ''}. Check capacity before moving affected shipments.</div>
+                <div className="text-sm text-amber-900 mt-1">{reviewService.id} is {reviewService.status.toLowerCase()} {reviewService.utilisationPct >= 80 ? `and at ${reviewService.utilisationPct}% utilisation` : ''}. {selectedIncident ? `Reviewing ${selectedIncident.type.toLowerCase()} affecting ${selectedIncident.affectedShipmentIds.length} shipment(s).` : 'Check capacity before moving affected shipments.'}</div>
               </div>
 
               {alternativeServices.length ? alternativeServices.map((service) => (
@@ -578,16 +620,16 @@ export const SchedulesView: React.FC = () => {
         </div>
       )}
 
-      {showTrainStatusModal && selectedService?.originalTrain && (
+      {showTrainStatusModal && selectedService && (
         <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between"><div><h3 className="text-lg font-bold">Update Train Status</h3><p className="text-xs text-slate-500 mt-1">{selectedService.id} · manual provider update</p></div><button onClick={() => setShowTrainStatusModal(false)} className="p-2 rounded-xl hover:bg-slate-100"><X className="w-4 h-4" /></button></div>
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between"><div><h3 className="text-lg font-bold">Update Service Status</h3><p className="text-xs text-slate-500 mt-1">{selectedService.id} · {selectedService.transportType === 'Train' ? 'manual provider update' : 'fleet operations update'}</p></div><button onClick={() => setShowTrainStatusModal(false)} className="p-2 rounded-xl hover:bg-slate-100"><X className="w-4 h-4" /></button></div>
             <div className="p-5 space-y-4 text-sm">
               <label className="space-y-1 block"><span className="text-xs font-medium text-slate-600">Status</span><select value={trainStatus} onChange={(event) => setTrainStatus(event.target.value as UnifiedServiceStatus)} className="w-full border border-slate-200 rounded-xl px-3 py-2.5"><option value="On Time">On Time</option><option value="Delayed">Delayed</option><option value="Departed">Departed</option><option value="Cancelled">Cancelled</option></select></label>
               {trainStatus === 'Delayed' && <label className="space-y-1 block"><span className="text-xs font-medium text-slate-600">Delay Minutes</span><input type="number" min={0} value={trainDelayMinutes} onChange={(event) => setTrainDelayMinutes(Number(event.target.value))} className="w-full border border-slate-200 rounded-xl px-3 py-2.5" /></label>}
               <label className="space-y-1 block"><span className="text-xs font-medium text-slate-600">Update Note</span><textarea rows={3} value={trainStatusNote} onChange={(event) => setTrainStatusNote(event.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2.5 resize-none" /></label>
             </div>
-            <div className="p-5 border-t border-slate-200 flex justify-end gap-2"><button onClick={() => setShowTrainStatusModal(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold">Cancel</button><button onClick={saveTrainStatus} className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Save Update</button></div>
+            <div className="p-5 border-t border-slate-200 flex justify-end gap-2"><button onClick={() => setShowTrainStatusModal(false)} className="px-4 py-2 rounded-xl border border-slate-200 text-sm font-semibold">Cancel</button><button onClick={saveServiceStatus} className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold flex items-center gap-2"><CheckCircle2 className="w-4 h-4" /> Save Update</button></div>
           </div>
         </div>
       )}
