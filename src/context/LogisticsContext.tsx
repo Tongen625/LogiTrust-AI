@@ -95,6 +95,8 @@ interface LogisticsContextType {
   injectRouteAnomaly: (shipmentId?: string) => void;
   approveRecommendation: (recId: string, notes?: string) => void;
   rejectRecommendation: (recId: string, reason?: string) => void;
+  submitRecommendationForManagerApproval: (recId: string, notes?: string) => void;
+  applyCoordinatorOperationalRecovery: (recId: string, notes?: string) => void;
   requestDriverVerification: (alertId: string, notes?: string) => void;
   resolveSecurityAlert: (alertId: string, notes?: string) => void;
   escalateSecurityAlert: (alertId: string, reason?: string) => void;
@@ -812,8 +814,7 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     shipmentId?: string;
     details: string;
   }) => {
-    const allowed: UserRole[] = ['Logistics Operations Manager', 'Transport Coordinator', 'Hub Operator', 'Security / Risk Officer', 'Driver'];
-    if (!requireRole(allowed, 'register incidents')) return;
+    if (!requireRole(['Logistics Operations Manager', 'Transport Coordinator', 'Hub Operator', 'Driver', 'Security / Risk Officer'], 'report incidents')) return;
 
     const affected = shipments.filter((s) => {
       if (input.shipmentId && s.id === input.shipmentId) return true;
@@ -830,26 +831,56 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const incidentId = `INC-${Date.now().toString().slice(-6)}`;
     const severity = input.severity || 'High';
 
+    const hubReportLabelMatch = input.details.match(/^\[([^\]]+)\]/);
+    const hubReportLabel = hubReportLabelMatch?.[1] || '';
+    const isWrongHub = input.type === 'Wrong Hub';
+    const isHubCongestion = input.type === 'Hub Congestion';
+    const isTransportIncident = ['Train Delay', 'Flood', 'Traffic', 'Vehicle Breakdown', 'Accident'].includes(input.type);
+    const isRouteSecurity = input.type === 'Route Deviation';
+    const isHubSortingProblem = hubReportLabel === 'Sorting / Outbound Problem';
+    const isHubTrustException =
+      ['Receiving Problem', 'Manifest Mismatch', 'Handoff / Custody Issue', 'Other Hub Issue'].includes(hubReportLabel)
+      || ['Missing Parcel', 'Invalid Scan'].includes(input.type);
+    const needsCoordinatorReview = isWrongHub || isHubCongestion || isTransportIncident;
+
     const recommendationByType: Record<IncidentType, string> = {
-      'Train Delay': 'Compare next rail service, wait baseline and emergency road option; reroute SLA-critical shipments.',
-      Flood: 'Avoid affected corridor; compare alternate road, rail and temporary hold options.',
-      Traffic: 'Recalculate ETA and compare alternate road corridor or rail transfer.',
-      'Vehicle Breakdown': 'Hold cargo securely and compare replacement vehicle, rail transfer or recovery wait.',
-      Accident: 'Prioritise safety, hold affected cargo and compare replacement transport / reroute options.',
-      'Hub Congestion': 'Re-slot inbound flow, delay selected arrivals or divert eligible shipments to an alternate hub.',
-      'Missing Parcel': 'Freeze affected handoff, reconcile manifest vs scans, search last custody point and escalate if not found.',
-      'Wrong Hub': 'Hold parcel at current hub and generate recovery route to the planned destination hub.',
-      'Route Deviation': 'Request driver verification, compare telemetry evidence and escalate if deviation is not justified.',
-      'Invalid Scan': 'Block custody progression, request rescan and verify identity / parcel / location / timestamp / sequence.',
+      'Train Delay': 'Compare next rail service, current wait baseline and road fallback; Transport Coordinator selects the feasible recovery plan.',
+      Flood: 'Avoid the affected corridor and compare alternate road, rail or temporary hold options before changing the transport plan.',
+      Traffic: 'Recalculate ETA and compare an alternate road corridor or rail transfer before changing the transport plan.',
+      'Vehicle Breakdown': 'Secure the load and compare replacement vehicle, rail transfer or recovery wait options.',
+      Accident: 'Prioritise safety, secure the affected load and compare replacement transport / reroute options.',
+      'Hub Congestion': 'Transport Coordinator reviews arrival slots, capacity and service timing; use re-slotting first and escalate only if a major reroute is needed.',
+      'Missing Parcel': 'Hub Operator freezes the affected handoff, reconciles manifest vs scans, searches the last custody point and escalates only if the parcel is not found.',
+      'Wrong Hub': 'Hold the parcel, verify the planned hub and route, then send it to Transport Coordinator for a recovery service back to the correct route.',
+      'Route Deviation': 'Request driver verification, compare telemetry evidence and escalate to Security / Risk Officer if the deviation is not justified.',
+      'Invalid Scan': 'Pause custody progression, request a re-scan and verify identity, parcel, location, timestamp and handoff sequence.',
     };
 
+    let recommendation = recommendationByType[input.type];
+    if (hubReportLabel === 'Receiving Problem') {
+      recommendation = 'Hub Operator pauses the affected receiving task, verifies the load / parcel reference and repeats the receiving scan before escalation.';
+    } else if (hubReportLabel === 'Manifest Mismatch') {
+      recommendation = 'Hub Operator completes receiving, reconciles expected vs received parcels, then confirms any missing or unexpected parcel before escalation.';
+    } else if (hubReportLabel === 'Handoff / Custody Issue') {
+      recommendation = 'Hub Operator requests fresh handoff evidence or re-scan and accepts custody only after identity, parcel, location and sequence checks pass.';
+    } else if (isHubSortingProblem) {
+      recommendation = 'Hub Operator keeps the shipment at the hub, corrects the sorting / outbound assignment and resumes outbound preparation after verification.';
+    } else if (hubReportLabel === 'Other Hub Issue') {
+      recommendation = 'Hub Operator handles the local operational issue first; escalate only if it becomes a transport, custody or security exception.';
+    }
+
     const category =
-      ['Train Delay', 'Flood', 'Traffic', 'Vehicle Breakdown', 'Accident'].includes(input.type) ? 'Transport'
-      : ['Hub Congestion', 'Wrong Hub'].includes(input.type) ? 'Hub'
-      : ['Route Deviation', 'Invalid Scan'].includes(input.type) ? 'Security'
+      isTransportIncident ? 'Transport'
+      : isWrongHub || isHubCongestion || isHubSortingProblem ? 'Hub'
+      : isRouteSecurity ? 'Security'
+      : input.type === 'Invalid Scan' && !isHubTrustException ? 'Security'
       : 'Parcel';
 
-    const requiresApproval = !['Missing Parcel', 'Invalid Scan', 'Route Deviation'].includes(input.type);
+    // Important responsibility rule:
+    // Reporting an incident never jumps straight to manager approval.
+    // Hub-local issues stay with Hub Operator. Network transport issues go to Transport Coordinator.
+    // Manager approval is requested only later, after Coordinator review, for a consequential change.
+    const requiresApproval = false;
     const incident: LogisticsIncident = {
       id: incidentId,
       type: input.type,
@@ -857,7 +888,7 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       occurredAt: input.occurredAt || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       location: input.location,
       severity,
-      status: requiresApproval ? 'Pending Approval' : 'Analysing',
+      status: 'Analysing',
       createdBy: `${currentUser.name} (${userRole})`,
       details: input.details,
       transportType: input.transportType,
@@ -865,13 +896,13 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       affectedHubId: input.affectedHubId,
       shipmentId: input.shipmentId,
       affectedShipmentIds: affectedIds,
-      recommendation: recommendationByType[input.type],
+      recommendation,
       decisionFactors: {
-        etaImpact: affected.length ? `${affected.length} shipment(s) require ETA recalculation` : 'No assigned shipment matched yet',
-        capacity: 'Check next available service / hub capacity before reroute',
-        cost: 'Compare baseline vs alternate transport cost',
-        security: input.type === 'Route Deviation' || input.type === 'Invalid Scan' || input.type === 'Missing Parcel' ? 'Elevated — evidence verification required' : 'Re-check custody when route changes',
-        sla: affected.some((s) => s.priority === 'High-Value' || s.priority === 'Cold-Chain') ? 'Priority SLA at risk' : 'Assess against target arrival',
+        etaImpact: affected.length ? `${affected.length} shipment(s) require ETA / operational impact review` : 'No assigned shipment matched yet',
+        capacity: needsCoordinatorReview ? 'Transport Coordinator checks service / hub capacity before any route change' : 'Not required unless this hub exception affects outbound flow',
+        cost: needsCoordinatorReview ? 'Compare current plan vs recovery option before escalation' : 'Local hub handling first',
+        security: isRouteSecurity || input.type === 'Invalid Scan' || input.type === 'Missing Parcel' || isWrongHub ? 'Evidence verification required' : 'Normal operational controls',
+        sla: needsCoordinatorReview ? 'Coordinator checks SLA impact before selecting recovery action' : 'Monitor only if local handling creates delay',
       },
       requiresApproval,
     };
@@ -881,11 +912,11 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (affectedIds.length) {
       setShipments((prev) => prev.map((s) => affectedIds.includes(s.id) ? {
         ...s,
-        status: input.type === 'Route Deviation' || input.type === 'Invalid Scan' || input.type === 'Missing Parcel' ? 'Security Review' : 'Delayed',
+        status: isRouteSecurity || input.type === 'Invalid Scan' || input.type === 'Missing Parcel' || isWrongHub ? 'Security Review' : isHubSortingProblem ? s.status : 'Delayed',
         riskLevel: severity === 'Critical' ? 'Critical' : severity === 'High' ? 'High' : 'Medium',
         riskScore: severity === 'Critical' ? 95 : severity === 'High' ? 78 : 55,
-        hasSecurityAlert: ['Route Deviation', 'Invalid Scan', 'Missing Parcel'].includes(input.type) || s.hasSecurityAlert,
-        hasPendingApproval: requiresApproval,
+        hasSecurityAlert: [ 'Route Deviation', 'Invalid Scan', 'Missing Parcel', 'Wrong Hub' ].includes(input.type) || s.hasSecurityAlert,
+        hasPendingApproval: false,
       } : s));
     }
 
@@ -900,24 +931,25 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       } : t));
     }
 
-    if (requiresApproval && affected[0]) {
+    if (needsCoordinatorReview && affected[0]) {
       const s = affected[0];
       const recId = `REC-${Date.now().toString().slice(-4)}`;
       setRecommendations((prev) => [{
         id: recId,
+        incidentId,
         shipmentId: s.id,
         detectedEvent: `${input.type} at ${input.location}`,
         impact: `${affectedIds.length || 1} shipment(s) affected. ${input.details}`,
-        recommendation: recommendationByType[input.type],
-        reason: `Decision engine considered ETA, capacity, cost, security risk and SLA impact for ${s.id}.`,
-        expectedResult: 'Restore a feasible route while preserving custody evidence and operational accountability.',
+        recommendation,
+        reason: `Decision support considered ETA, capacity, cost, security risk and SLA impact. Transport Coordinator must review before execution or manager escalation.`,
+        expectedResult: 'Restore a feasible transport plan while preserving custody evidence and operational accountability.',
         expectedImprovementMins: 30,
-        capacityStatus: 'Available',
-        connectionTime: 'Feasible (45 min buffer at alternate transfer point)',
-        securityRisk: input.type === 'Flood' || input.type === 'Accident' ? 'Medium' : 'Low',
+        capacityStatus: 'Check alternatives',
+        connectionTime: 'To be confirmed by Transport Coordinator',
+        securityRisk: isWrongHub || input.type === 'Flood' || input.type === 'Accident' ? 'Medium' : 'Low',
         confidence: 88,
         targetService: input.affectedServiceId || 'Best Available Alternative',
-        status: 'Pending Approval',
+        status: 'Coordinator Review',
         timestamp: 'Now',
         evidence: [
           `Incident ${incidentId}: ${input.type}`,
@@ -927,32 +959,118 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         ],
         alternativesConsidered: [
           { name: 'Recommended Recovery Plan', eta: 'Best feasible ETA', cost: '+8%', risk: 'Low', capacity: 'Available', deadlineFeasible: true, score: 90 },
-          { name: 'Hold / Wait Baseline', eta: 'Delayed', cost: 'Baseline', risk: 'High', capacity: 'Booked', deadlineFeasible: false, score: 42 },
-          { name: 'Emergency Road / Alternate Hub', eta: 'Fallback', cost: '+28%', risk: 'Medium', capacity: 'Standby', deadlineFeasible: true, score: 70 },
+          { name: 'Hold / Wait Baseline', eta: 'Delayed', cost: 'Baseline', risk: 'Medium', capacity: 'Booked', deadlineFeasible: false, score: 48 },
+          { name: 'Alternate Transport / Hub', eta: 'Fallback', cost: '+28%', risk: 'Medium', capacity: 'Standby', deadlineFeasible: true, score: 70 },
         ],
       }, ...prev]);
     }
 
     setAgents((prev) => prev.map((a) => {
-      if (a.name === 'Disruption Agent' && category === 'Transport') return { ...a, status: 'Analysing', anomalyDetected: true, currentTask: `${input.type}: impact analysis for ${affectedIds.length} shipment(s)` };
-      if (a.name === 'Scheduling Agent' && requiresApproval) return { ...a, status: 'Analysing', currentTask: `Generating reroute options for ${incidentId}` };
-      if (a.name === 'Route Risk Agent' && category === 'Security') return { ...a, status: 'Action Required', anomalyDetected: true, currentTask: `${input.type}: evidence verification required` };
-      if (a.name === 'Trust / Handoff Agent' && (category === 'Parcel' || category === 'Hub')) return { ...a, status: 'Action Required', anomalyDetected: true, currentTask: `${input.type}: custody reconciliation in progress` };
-      if (a.name === 'Decision Agent' && requiresApproval) return { ...a, status: 'Waiting for Approval', currentTask: `Incident ${incidentId} recovery plan awaiting manager` };
+      if (isWrongHub && a.name === 'Trust / Handoff Agent') {
+        return { ...a, status: 'Action Required', anomalyDetected: true, currentTask: `Wrong-hub evidence check for ${incidentId}` };
+      }
+      if (isWrongHub && a.name === 'Scheduling Agent') {
+        return { ...a, status: 'Analysing', currentTask: `Finding recovery service to return affected parcel to the planned route` };
+      }
+      if (isWrongHub && a.name === 'Decision Agent') {
+        return { ...a, status: 'Action Required', currentTask: `Recovery options ready for Transport Coordinator review` };
+      }
+      if (isHubCongestion && a.name === 'Disruption Agent') {
+        return { ...a, status: 'Analysing', anomalyDetected: true, currentTask: `Hub congestion at ${input.location}: transport impact analysis` };
+      }
+      if (isHubCongestion && a.name === 'Scheduling Agent') {
+        return { ...a, status: 'Analysing', currentTask: `Checking arrival slots and alternate capacity for ${input.location}` };
+      }
+      if (isHubCongestion && a.name === 'Decision Agent') {
+        return { ...a, status: 'Action Required', currentTask: `Congestion recovery options ready for Transport Coordinator review` };
+      }
+      if (isHubTrustException && a.name === 'Trust / Handoff Agent') {
+        return { ...a, status: 'Action Required', anomalyDetected: true, currentTask: `${hubReportLabel || input.type}: reconciling manifest, scan and custody evidence` };
+      }
+      if (isTransportIncident && a.name === 'Disruption Agent') {
+        return { ...a, status: 'Analysing', anomalyDetected: true, currentTask: `${input.type}: impact analysis for ${affectedIds.length} shipment(s)` };
+      }
+      if (isTransportIncident && a.name === 'Scheduling Agent') {
+        return { ...a, status: 'Analysing', currentTask: `Generating transport recovery options for ${incidentId}` };
+      }
+      if (isTransportIncident && a.name === 'Decision Agent') {
+        return { ...a, status: 'Action Required', currentTask: `Recovery options ready for Transport Coordinator review` };
+      }
+      if (isRouteSecurity && a.name === 'Route Risk Agent') {
+        return { ...a, status: 'Action Required', anomalyDetected: true, currentTask: `${input.type}: route / telemetry evidence verification required` };
+      }
       return a;
     }));
+
+    const outcome = needsCoordinatorReview
+      ? 'TRANSPORT COORDINATOR REVIEW'
+      : isRouteSecurity
+      ? 'SECURITY REVIEW'
+      : 'HUB OPERATOR ACTION';
 
     logAudit(
       currentUser.name,
       userRole,
       `Incident Registered: ${input.type} (${incidentId})`,
       `${input.details} | Location: ${input.location} | Affected: ${affectedIds.join(', ') || 'No current match'}`,
-      recommendationByType[input.type],
-      requiresApproval ? 'PENDING MANAGER APPROVAL' : 'INVESTIGATION STARTED',
-      affectedIds.length ? `${affectedIds.length} shipment(s) flagged and routed to relevant agent workflow` : 'Incident stored; no currently assigned shipment matched',
+      recommendation,
+      outcome,
+      needsCoordinatorReview
+        ? 'Recovery options routed to Transport Coordinator; no manager approval requested yet'
+        : isHubSortingProblem
+        ? 'Local sorting / outbound exception remains with Hub Operator'
+        : 'Incident routed to the relevant operational / evidence workflow',
       affectedIds[0]
     );
-    showToast(`⚠️ ${input.type} incident created. ${affectedIds.length} shipment(s) affected.`);
+
+    const workflowMessage = isWrongHub
+      ? 'Trust / Handoff Agent verifies the wrong-hub evidence; recovery options are routed to Transport Coordinator.'
+      : isHubCongestion
+      ? 'Disruption, Scheduling and Decision Agents are analysing transport impact for Transport Coordinator review.'
+      : isHubSortingProblem
+      ? 'This remains a Hub Operator operational issue. Correct the sorting / outbound assignment and resume preparation.'
+      : isHubTrustException
+      ? 'Trust / Handoff Agent is reconciling manifest, scan and custody evidence.'
+      : isRouteSecurity
+      ? 'Route Risk Agent is verifying route and telemetry evidence.'
+      : isTransportIncident
+      ? 'Disruption, Scheduling and Decision Agents are preparing recovery options for Transport Coordinator review.'
+      : 'Relevant workflow started.';
+    showToast(`⚠️ ${input.type} incident created. ${workflowMessage}`);
+  };
+
+  const submitRecommendationForManagerApproval = (recId: string, notes = 'Consequential transport change requires Operations Manager approval') => {
+    if (!requireRole(['Transport Coordinator'], 'submit recommendations for manager approval')) return;
+    const rec = recommendations.find((r: any) => r.id === recId);
+    if (!rec) return;
+    const incidentId = rec.incidentId;
+    setRecommendations((prev) => prev.map((r: any) => r.id === recId ? { ...r, status: 'Pending Approval', coordinatorNotes: notes } : r));
+    if (incidentId) {
+      setIncidents((prev) => prev.map((i) => i.id === incidentId ? { ...i, status: 'Pending Approval', requiresApproval: true } : i));
+    }
+    setShipments((prev) => prev.map((s) => s.id === rec.shipmentId ? { ...s, hasPendingApproval: true } : s));
+    setAgents((prev) => prev.map((a) => a.name === 'Decision Agent'
+      ? { ...a, status: 'Waiting for Approval', currentTask: `${recId} submitted by Transport Coordinator for Operations Manager approval` }
+      : a));
+    logAudit(currentUser.name, userRole, `Manager Approval Requested: ${recId}`, notes, rec.recommendation || 'Recovery recommendation', 'PENDING MANAGER APPROVAL', 'Operations Manager must approve or reject before consequential execution', rec.shipmentId);
+    showToast(`📨 ${recId} submitted to Operations Manager for approval.`);
+  };
+
+  const applyCoordinatorOperationalRecovery = (recId: string, notes = 'Minor operational transport adjustment applied by Transport Coordinator') => {
+    if (!requireRole(['Transport Coordinator'], 'apply operational transport recovery')) return;
+    const rec = recommendations.find((r: any) => r.id === recId);
+    if (!rec) return;
+    const incidentId = rec.incidentId;
+    setRecommendations((prev) => prev.map((r: any) => r.id === recId ? { ...r, status: 'Implemented', coordinatorNotes: notes } : r));
+    if (incidentId) {
+      setIncidents((prev) => prev.map((i) => i.id === incidentId ? { ...i, status: 'Resolved', requiresApproval: false, resolution: notes } : i));
+    }
+    setShipments((prev) => prev.map((s) => s.id === rec.shipmentId ? { ...s, hasPendingApproval: false } : s));
+    setAgents((prev) => prev.map((a) => ['Scheduling Agent', 'Decision Agent', 'Disruption Agent'].includes(a.name)
+      ? { ...a, status: 'Monitoring', currentTask: `Monitoring operational recovery after ${recId}` }
+      : a));
+    logAudit(currentUser.name, userRole, `Operational Recovery Applied: ${recId}`, notes, rec.recommendation || 'Recovery recommendation', 'IMPLEMENTED BY TRANSPORT COORDINATOR', 'Minor transport adjustment completed without manager approval', rec.shipmentId);
+    showToast(`✅ ${recId} applied as an operational adjustment.`);
   };
 
   const resolveIncident = (incidentId: string, resolution = 'Incident reviewed and operational recovery completed') => {
@@ -1137,6 +1255,8 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         injectRouteAnomaly,
         approveRecommendation,
         rejectRecommendation,
+        submitRecommendationForManagerApproval,
+        applyCoordinatorOperationalRecovery,
         requestDriverVerification,
         resolveSecurityAlert,
         escalateSecurityAlert,
