@@ -222,9 +222,9 @@ export const TransportCoordinatorDashboardView: React.FC = () => {
       action: () => setActiveTab('schedules'),
     },
     {
-      label: 'Affected Shipments',
-      value: affectedShipmentIds.size,
-      helper: 'Shipments linked to a disruption',
+      label: 'Affected Loads',
+      value: disruptedServices.length,
+      helper: `${affectedShipmentIds.size} shipment(s) inside disrupted loads`,
       icon: Package,
       action: () => setActiveTab('shipments'),
     },

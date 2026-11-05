@@ -1,206 +1,421 @@
 import React, { useMemo, useState } from 'react';
 import { useLogistics } from '../context/LogisticsContext';
-import { MobileTabBar, MobileProfileCard } from '../components/MobileTabBar';
+import { buildCoordinatorLoads, CoordinatorLoad } from '../data/coordinatorLoadModel';
 import {
-  CalendarDays,
-  Train,
+  AlertTriangle,
+  ArrowLeft,
+  Boxes,
+  ChevronRight,
+  CircleDot,
   Clock3,
-  CircleAlert,
-  CheckCircle2,
-  Plus,
-  RefreshCcw,
+  Gauge,
+  Package,
   Route,
-  ShieldCheck,
-  BellRing,
+  Train,
+  Truck,
 } from 'lucide-react';
 
-export const TransportCoordinatorAppView: React.FC = () => {
-  const { trainSchedules, recommendations, incidents, updateTrainStatus, addNewTrainSchedule, setActiveTab } = useLogistics();
-  const [message, setMessage] = useState<string | null>(null);
-  const [addedManualService, setAddedManualService] = useState(false);
-  const TABS = ['Schedules', 'Services', 'Fallback', 'Profile'];
-  const [tab, setTab] = useState(TABS[0]);
-  const show = (t: string) => tab === TABS[0] || tab === t;
+type MobileSection = 'loads' | 'incidents' | 'overview';
+type DetailView =
+  | { type: 'load'; id: string }
+  | { type: 'incident'; id: string }
+  | null;
 
-  const notify = (msg: string) => {
-    setMessage(msg);
-    setTimeout(() => setMessage((current) => (current === msg ? null : current)), 4200);
+const statusClass = (status: string) => {
+  if (status === 'Cancelled') return 'bg-rose-50 text-rose-700 border-rose-200';
+  if (status === 'Delayed') return 'bg-amber-50 text-amber-700 border-amber-200';
+  if (status === 'Departed') return 'bg-slate-100 text-slate-600 border-slate-200';
+  return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+};
+
+const timeToMinutes = (value: string) => {
+  const match = String(value || '').match(/(\d{1,2}):(\d{2})/);
+  if (!match) return Number.MAX_SAFE_INTEGER;
+  return Number(match[1]) * 60 + Number(match[2]);
+};
+
+const priorityScore = (load: CoordinatorLoad) => {
+  if (load.status === 'Cancelled') return 0;
+  if (load.incidentIds.length > 0 && load.delayMinutes > 0) return 1;
+  if (load.incidentIds.length > 0) return 2;
+  if (load.status === 'Delayed') return 3;
+  if (load.utilisationPct >= 90) return 4;
+  return 10;
+};
+
+export const TransportCoordinatorAppView: React.FC = () => {
+  const { trainSchedules, shipments, incidents } = useLogistics();
+  const loads = useMemo(
+    () => buildCoordinatorLoads(trainSchedules, shipments, incidents),
+    [trainSchedules, shipments, incidents]
+  );
+
+  const sortedLoads = useMemo(
+    () => [...loads].sort((a, b) => {
+      const p = priorityScore(a) - priorityScore(b);
+      return p !== 0 ? p : timeToMinutes(a.arrival) - timeToMinutes(b.arrival);
+    }),
+    [loads]
+  );
+
+  const transportIncidents = useMemo(
+    () => incidents.filter(
+      (incident) =>
+        incident.status !== 'Resolved' &&
+        (incident.category === 'Transport' || incident.type === 'Hub Congestion' || incident.type === 'Wrong Hub')
+    ),
+    [incidents]
+  );
+
+  const [section, setSection] = useState<MobileSection>('loads');
+  const [detail, setDetail] = useState<DetailView>(null);
+
+  const actionLoads = loads.filter((load) => load.requiresCoordinatorAction);
+  const selectedLoad = detail?.type === 'load' ? loads.find((load) => load.id === detail.id) : undefined;
+  const selectedIncident = detail?.type === 'incident'
+    ? transportIncidents.find((incident) => incident.id === detail.id)
+    : undefined;
+
+  const openSection = (next: MobileSection) => {
+    setSection(next);
+    setDetail(null);
   };
 
-  const activeSchedules = useMemo(() => trainSchedules.slice(0, 4), [trainSchedules]);
-  const delayedCount = trainSchedules.filter((t) => t.status === 'Delayed').length;
-  const primaryRec = recommendations.find((r) => r.shipmentId === 'MY102938') || recommendations[0];
-  const hubCongestionAlerts = incidents.filter((incident) => incident.type === 'Hub Congestion' && incident.status !== 'Resolved');
+  const loadShipments = selectedLoad
+    ? shipments.filter((shipment) => selectedLoad.shipmentIds.includes(shipment.id))
+    : [];
+
+  const incidentLoad = selectedIncident?.affectedServiceId
+    ? loads.find((load) => load.serviceId === selectedIncident.affectedServiceId)
+    : undefined;
 
   return (
-    <div className="p-4 lg:p-6 flex flex-col items-center">
-      <div className="w-full max-w-sm bg-slate-950 rounded-[36px] border-4 border-slate-800 shadow-2xl overflow-hidden flex flex-col min-h-[680px] text-slate-100 relative">
-        <div className="bg-slate-900 px-6 py-2.5 flex items-center justify-between text-[11px] font-mono text-slate-400 border-b border-slate-800">
-          <span>09:42 AM</span>
-          <div className="w-16 h-3 bg-slate-800 rounded-full mx-auto"></div>
-          <span className="text-cyan-400">5G • 96%</span>
-        </div>
-
-        {message && (
-          <div className="bg-cyan-500 text-slate-950 font-bold px-4 py-2 text-[11px] flex items-center justify-between shadow-lg">
-            <span>{message}</span>
-            <button onClick={() => setMessage(null)} className="font-extrabold ml-2">✕</button>
-          </div>
-        )}
-
-        <div className="bg-slate-900/90 p-4 border-b border-slate-800">
-          <div className="flex items-center justify-between">
+    <div className="min-h-full bg-slate-100 p-3 sm:p-5">
+      <div className="mx-auto max-w-md min-h-[760px] rounded-[30px] bg-white border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+        <header className="p-5 bg-slate-950 text-white shrink-0">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-sm font-bold text-white">Transport Coordinator App</h2>
-              <p className="text-[11px] text-slate-400">Manual timetable fallback & rail rescheduling</p>
-            </div>
-            <div className="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-xs border border-cyan-500/30">
-              TW
-            </div>
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-mono">
-            <div className="p-2 bg-slate-950 rounded-lg border border-slate-800">
-              <span className="text-[10px] text-slate-500 uppercase block">Rail Services</span>
-              <strong className="text-white text-base">{trainSchedules.length}</strong>
-            </div>
-            <div className="p-2 bg-slate-950 rounded-lg border border-slate-800">
-              <span className="text-[10px] text-slate-500 uppercase block">Delayed</span>
-              <strong className="text-amber-400 text-base">{delayedCount}</strong>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-1 p-4 overflow-y-auto space-y-3.5 text-xs">
-          {tab === 'Profile' && <MobileProfileCard />}
-          {tab === TABS[0] && hubCongestionAlerts.length > 0 && (
-            <div className="p-3.5 bg-amber-950/20 rounded-2xl border border-amber-500/40 shadow-lg space-y-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-amber-300 font-bold">
-                  <BellRing className="w-4 h-4" />
-                  <span className="text-[10px] uppercase">Hub Congestion Alert</span>
-                </div>
-                <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-bold">
-                  {hubCongestionAlerts.length} OPEN
-                </span>
+              <div className="text-[10px] text-sky-300 font-semibold uppercase tracking-[0.18em]">Transport Coordinator App</div>
+              <div className="text-xl font-bold mt-1">
+                {detail?.type === 'load' ? 'Load Details' : detail?.type === 'incident' ? 'Incident Details' : 'Network Loads'}
               </div>
-              {hubCongestionAlerts.slice(0, 2).map((incident) => (
-                <div key={incident.id} className="rounded-xl border border-slate-800 bg-slate-950/70 p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-bold text-white text-[11px]">{incident.location}</div>
-                      <div className="text-[10px] text-slate-500 mt-0.5">{incident.occurredAt} · {incident.id}</div>
-                    </div>
-                    <span className={`text-[9px] font-bold uppercase ${incident.severity === 'High' || incident.severity === 'Critical' ? 'text-rose-300' : incident.severity === 'Medium' ? 'text-amber-300' : 'text-emerald-300'}`}>
-                      {incident.severity}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-300 mt-2 leading-relaxed">{incident.details}</p>
-                </div>
-              ))}
+              <div className="text-xs text-slate-300 mt-1">
+                {detail ? 'Mobile operational view' : `${actionLoads.length} load(s) need attention`}
+              </div>
+            </div>
+            {detail && (
               <button
-                onClick={() => setActiveTab('schedules')}
-                className="w-full py-2 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold text-[11px] hover:bg-amber-500/30 transition"
+                onClick={() => setDetail(null)}
+                className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center hover:bg-white/15"
+                aria-label="Back"
               >
-                Review Transport Schedule
+                <ArrowLeft className="w-4 h-4" />
               </button>
+            )}
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto bg-white">
+          {!detail && section === 'loads' && (
+            <div>
+              <div className="px-4 py-3 border-b bg-slate-50 flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-bold text-slate-900">Active Loads</div>
+                  <div className="text-[11px] text-slate-500">Priority first, then earliest ETA</div>
+                </div>
+                <span className="text-xs font-semibold text-slate-500">{loads.length}</span>
+              </div>
+              <div className="divide-y">
+                {sortedLoads.map((load) => {
+                  const Icon = load.transportType === 'Train' ? Train : Truck;
+                  return (
+                    <button
+                      key={load.id}
+                      onClick={() => setDetail({ type: 'load', id: load.id })}
+                      className="w-full p-4 text-left flex gap-3 hover:bg-slate-50"
+                    >
+                      <span className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center shrink-0">
+                        <Icon className="w-4 h-4" />
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between gap-2 items-start">
+                          <div>
+                            <div className="font-bold text-slate-950">{load.serviceId}</div>
+                            <div className="text-[10px] text-slate-400">{load.id}</div>
+                          </div>
+                          <span className={`text-[10px] px-2 py-1 rounded-full border font-semibold ${statusClass(load.status)}`}>
+                            {load.status}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1 truncate">{load.route}</div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-400 mt-2">
+                          <span>ETA {load.arrival}</span>
+                          <span>{load.shipmentIds.length} shipments</span>
+                          <span>{load.parcelCount} parcels</span>
+                        </div>
+                        {load.incidentIds.length > 0 && (
+                          <div className="mt-2 text-[11px] font-semibold text-rose-600 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" />
+                            {load.incidentIds.length} active incident{load.incidentIds.length === 1 ? '' : 's'}
+                          </div>
+                        )}
+                      </div>
+                      <ChevronRight className="w-4 h-4 mt-3 text-slate-400 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
-          {show('Fallback') && <div className="p-3.5 bg-slate-900 rounded-2xl border border-cyan-500/40 shadow-lg space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] uppercase font-bold text-cyan-400">Manual Provider Fallback</span>
-              <span className="px-2 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-[10px]">ACTIVE</span>
-            </div>
-            <p className="text-slate-300 leading-relaxed">
-              When railway/provider API synchronization is unavailable, coordinators can manually add train times and update service status.
-            </p>
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <button
-                onClick={() => {
-                  if (!addedManualService) {
-                    addNewTrainSchedule({
-                      id: 'T120',
-                      route: 'Johor Bahru → Klang Valley',
-                      originHub: 'Johor Bahru',
-                      destHub: 'Klang Valley',
-                      departure: '10:30',
-                      arrival: '14:15',
-                      status: 'On Time',
-                      delayMinutes: 0,
-                      capacityAvailable: true,
-                      currentUtilisationPct: 42,
-                      cargoCapacityTons: 40,
-                      isManualOverride: true,
-                      dataSource: 'Manual Operator Override',
-                      notes: 'Added via mobile transport coordinator app',
-                    });
-                    setAddedManualService(true);
-                  }
-                  notify('Manual train service/time entry saved to the schedule board.');
-                }}
-                className="py-2 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl flex items-center justify-center gap-1 text-[11px] shadow transition"
-              >
-                <Plus className="w-3 h-3" /> Add Train Time
-              </button>
-              <button
-                onClick={() => {
-                  updateTrainStatus('T105', 'Delayed', 90, 'Standalone manual override from transport app');
-                  notify('T105 status updated to Delayed (+90 min). AI impact recalculation triggered.');
-                }}
-                className="py-2 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-bold rounded-xl flex items-center justify-center gap-1 text-[11px] transition"
-              >
-                <RefreshCcw className="w-3 h-3" /> Update Status
-              </button>
-            </div>
-          </div>}
 
-          {show('Services') && <div className="space-y-2">
-            <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Active Rail Timetable</span>
-            {(tab === 'Services' ? trainSchedules : activeSchedules).map((schedule) => (
-              <div key={schedule.id} className="p-3 bg-slate-900 rounded-xl border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="text-white font-bold flex items-center gap-1"><Train className="w-3 h-3 text-cyan-400" /> {schedule.id}</div>
-                    <div className="text-[11px] text-slate-400">{schedule.route}</div>
+          {!detail && section === 'incidents' && (
+            <div>
+              <div className="px-4 py-3 border-b bg-slate-50">
+                <div className="text-sm font-bold text-slate-900">Transport Incidents</div>
+                <div className="text-[11px] text-slate-500">Open incident and recovery context</div>
+              </div>
+              <div className="divide-y">
+                {transportIncidents.map((incident) => (
+                  <button
+                    key={incident.id}
+                    onClick={() => setDetail({ type: 'incident', id: incident.id })}
+                    className="w-full p-4 text-left flex gap-3 hover:bg-slate-50"
+                  >
+                    <span className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0">
+                      <AlertTriangle className="w-4 h-4" />
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between gap-2">
+                        <span className="font-bold text-slate-950">{incident.type}</span>
+                        <span className="text-[10px] text-slate-400">{incident.affectedServiceId || 'Network'}</span>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1 line-clamp-2">{incident.details}</div>
+                      <div className="flex gap-2 mt-2 text-[10px]">
+                        <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-600">{incident.severity}</span>
+                        <span className="rounded-full bg-sky-50 px-2 py-1 text-sky-700">{incident.status}</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 mt-3 text-slate-400 shrink-0" />
+                  </button>
+                ))}
+                {!transportIncidents.length && (
+                  <div className="p-6 text-sm text-center text-slate-500">No active transport incidents.</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!detail && section === 'overview' && (
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                  <Boxes className="w-5 h-5 text-sky-600" />
+                  <div className="text-2xl font-bold text-slate-950 mt-3">{loads.length}</div>
+                  <div className="text-xs text-slate-500">Active loads</div>
+                </div>
+                <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4">
+                  <AlertTriangle className="w-5 h-5 text-amber-700" />
+                  <div className="text-2xl font-bold text-slate-950 mt-3">{actionLoads.length}</div>
+                  <div className="text-xs text-slate-500">Need action</div>
+                </div>
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                  <Package className="w-5 h-5 text-sky-600" />
+                  <div className="text-2xl font-bold text-slate-950 mt-3">
+                    {loads.reduce((sum, load) => sum + load.shipmentIds.length, 0)}
                   </div>
-                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${schedule.status === 'Delayed' ? 'bg-amber-500/10 border-amber-500/30 text-amber-300' : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'}`}>
-                    {schedule.status}
+                  <div className="text-xs text-slate-500">Assigned shipments</div>
+                </div>
+                <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4">
+                  <Gauge className="w-5 h-5 text-sky-600" />
+                  <div className="text-2xl font-bold text-slate-950 mt-3">
+                    {loads.length ? Math.round(loads.reduce((sum, load) => sum + load.utilisationPct, 0) / loads.length) : 0}%
+                  </div>
+                  <div className="text-xs text-slate-500">Avg. utilisation</div>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b font-bold text-sm">Priority Queue</div>
+                <div className="divide-y">
+                  {actionLoads.slice(0, 5).map((load) => (
+                    <button
+                      key={load.id}
+                      onClick={() => setDetail({ type: 'load', id: load.id })}
+                      className="w-full p-3 text-left hover:bg-slate-50 flex items-center justify-between gap-3"
+                    >
+                      <div>
+                        <div className="font-semibold text-sm">{load.serviceId}</div>
+                        <div className="text-[11px] text-slate-500">{load.route}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs font-semibold text-amber-600">ETA {load.arrival}</div>
+                        <div className="text-[10px] text-slate-400">{load.status}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {selectedLoad && (
+            <div className="p-4 space-y-4">
+              <section className="rounded-2xl border border-slate-200 p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs text-slate-400">{selectedLoad.id}</div>
+                    <div className="text-xl font-bold text-slate-950 mt-0.5">{selectedLoad.serviceId}</div>
+                    <div className="text-xs text-slate-500 mt-1">{selectedLoad.route}</div>
+                  </div>
+                  <span className={`text-[10px] px-2 py-1 rounded-full border font-semibold ${statusClass(selectedLoad.status)}`}>
+                    {selectedLoad.status}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-[10px]">
-                  <div className="p-2 bg-slate-950 rounded-lg border border-slate-800"><span className="text-slate-500 block">Dep</span><strong>{schedule.departure}</strong></div>
-                  <div className="p-2 bg-slate-950 rounded-lg border border-slate-800"><span className="text-slate-500 block">Arr</span><strong>{schedule.arrival}</strong></div>
-                  <div className="p-2 bg-slate-950 rounded-lg border border-slate-800"><span className="text-slate-500 block">Load</span><strong>{schedule.currentUtilisationPct}%</strong></div>
+                <div className="grid grid-cols-2 gap-3 mt-4 text-xs">
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <div className="text-slate-400">ETA</div>
+                    <div className="font-bold mt-1">{selectedLoad.arrival}</div>
+                    {selectedLoad.delayMinutes > 0 && <div className="text-amber-600 mt-1">+{selectedLoad.delayMinutes} min</div>}
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <div className="text-slate-400">Capacity</div>
+                    <div className="font-bold mt-1">{selectedLoad.utilisationPct}%</div>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <div className="text-slate-400">Shipments</div>
+                    <div className="font-bold mt-1">{selectedLoad.shipmentIds.length}</div>
+                  </div>
+                  <div className="rounded-xl bg-slate-50 p-3">
+                    <div className="text-slate-400">Parcels</div>
+                    <div className="font-bold mt-1">{selectedLoad.parcelCount}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>}
+              </section>
 
-          {show('Services') && primaryRec && (
-            <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold text-emerald-400 block">AI Comparison Result</span>
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="text-slate-200 font-semibold">{primaryRec.recommendation}</div>
-              <div className="grid grid-cols-2 gap-2 text-[10px]">
-                <div className="p-2 rounded-lg bg-slate-950 border border-slate-800"><span className="text-slate-500 block uppercase">Expected Result</span><strong className="text-emerald-300">+{primaryRec.expectedImprovementMins} min recovery</strong></div>
-                <div className="p-2 rounded-lg bg-slate-950 border border-slate-800"><span className="text-slate-500 block uppercase">Security Risk</span><strong className="text-slate-200">{primaryRec.securityRisk}</strong></div>
-              </div>
-              <p className="text-[10px] text-slate-500 leading-relaxed">Recommendation is prepared for Operations Manager approval before consequential rerouting is executed.</p>
+              <section className="rounded-2xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b">
+                  <div className="font-bold text-sm">Shipments on Load</div>
+                  <div className="text-[11px] text-slate-500">Load → Shipment → Parcel</div>
+                </div>
+                <div className="divide-y">
+                  {loadShipments.map((shipment) => (
+                    <div key={shipment.id} className="p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="font-bold text-sm text-sky-700">{shipment.id}</div>
+                        <div className="text-[11px] text-slate-500">ETA {shipment.eta || '—'}</div>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1">{shipment.origin} → {shipment.destination}</div>
+                      <div className="mt-2 rounded-xl bg-slate-50 p-3">
+                        <div className="text-[10px] uppercase tracking-wide text-slate-400">Parcels</div>
+                        <div className="text-xs text-slate-700 mt-1 break-words">
+                          {shipment.parcelIds?.length ? shipment.parcelIds.join(', ') : `${shipment.parcelCount || 1} parcel(s)`}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {!loadShipments.length && <div className="p-4 text-sm text-slate-500">No assigned shipment records.</div>}
+                </div>
+              </section>
+
+              {selectedLoad.incidentIds.length > 0 && (
+                <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex items-center gap-2 font-bold text-sm text-amber-800">
+                    <AlertTriangle className="w-4 h-4" /> Active Incident
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {transportIncidents
+                      .filter((incident) => selectedLoad.incidentIds.includes(incident.id))
+                      .map((incident) => (
+                        <button
+                          key={incident.id}
+                          onClick={() => setDetail({ type: 'incident', id: incident.id })}
+                          className="w-full rounded-xl bg-white/70 border border-amber-200 p-3 text-left"
+                        >
+                          <div className="font-semibold text-xs">{incident.type}</div>
+                          <div className="text-[11px] text-amber-800 mt-1 line-clamp-2">{incident.details}</div>
+                        </button>
+                      ))}
+                  </div>
+                </section>
+              )}
             </div>
           )}
 
-          {tab === TABS[0] && <div className="p-2.5 bg-blue-950/30 rounded-xl border border-blue-500/30 text-[10px] text-slate-300 space-y-1">
-            <div className="font-bold flex items-center gap-1 text-blue-300">
-              <CalendarDays className="w-3 h-3 text-cyan-400" /> Schedule Policy Guardrail
+          {selectedIncident && (
+            <div className="p-4 space-y-4">
+              <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                <div className="flex items-start gap-3">
+                  <span className="w-10 h-10 rounded-xl bg-white/80 text-amber-700 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-4 h-4" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="text-[10px] uppercase tracking-wide text-amber-700">{selectedIncident.id}</div>
+                    <div className="text-lg font-bold text-slate-950 mt-0.5">{selectedIncident.type}</div>
+                    <div className="text-xs text-slate-600 mt-1">{selectedIncident.location}</div>
+                  </div>
+                </div>
+                <div className="mt-4 rounded-xl bg-white/70 p-3 text-xs text-slate-700 leading-relaxed">
+                  {selectedIncident.details}
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-slate-200 p-4 space-y-3">
+                <div className="font-bold text-sm">Incident Context</div>
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="rounded-xl bg-slate-50 p-3"><div className="text-slate-400">Service</div><div className="font-semibold mt-1">{selectedIncident.affectedServiceId || 'Network'}</div></div>
+                  <div className="rounded-xl bg-slate-50 p-3"><div className="text-slate-400">Severity</div><div className="font-semibold mt-1">{selectedIncident.severity}</div></div>
+                  <div className="rounded-xl bg-slate-50 p-3"><div className="text-slate-400">Status</div><div className="font-semibold mt-1">{selectedIncident.status}</div></div>
+                  <div className="rounded-xl bg-slate-50 p-3"><div className="text-slate-400">Affected shipments</div><div className="font-semibold mt-1">{selectedIncident.affectedShipmentIds?.length || 0}</div></div>
+                </div>
+              </section>
+
+              {selectedIncident.recommendation && (
+                <section className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                  <div className="text-xs font-bold text-sky-800">Recovery Recommendation</div>
+                  <div className="text-xs text-sky-900 mt-2 leading-relaxed">{selectedIncident.recommendation}</div>
+                </section>
+              )}
+
+              {incidentLoad && (
+                <button
+                  onClick={() => setDetail({ type: 'load', id: incidentLoad.id })}
+                  className="w-full rounded-2xl border border-slate-200 p-4 text-left flex items-center justify-between gap-3 hover:bg-slate-50"
+                >
+                  <div>
+                    <div className="text-[10px] uppercase tracking-wide text-slate-400">Affected Load</div>
+                    <div className="font-bold text-sm mt-1">{incidentLoad.serviceId}</div>
+                    <div className="text-xs text-slate-500 mt-1">{incidentLoad.route}</div>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-slate-400" />
+                </button>
+              )}
             </div>
-            <p>
-              This app allows manual timetable and status handling only. Final shipment rerouting remains subject to Operations Manager approval and audit logging.
-            </p>
-          </div>}
-        </div>
-        <MobileTabBar tabs={TABS} active={tab} onChange={setTab} />
+          )}
+        </main>
+
+        <footer className="grid grid-cols-3 border-t bg-slate-50 shrink-0">
+          <button
+            onClick={() => openSection('loads')}
+            className={`py-3 text-xs font-semibold flex flex-col items-center gap-1 ${section === 'loads' && !detail ? 'text-sky-700' : 'text-slate-500'}`}
+          >
+            <Route className="w-4 h-4" />
+            Loads
+          </button>
+          <button
+            onClick={() => openSection('incidents')}
+            className={`py-3 text-xs font-semibold flex flex-col items-center gap-1 ${section === 'incidents' && !detail ? 'text-sky-700' : 'text-slate-500'}`}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            Incidents
+          </button>
+          <button
+            onClick={() => openSection('overview')}
+            className={`py-3 text-xs font-semibold flex flex-col items-center gap-1 ${section === 'overview' && !detail ? 'text-sky-700' : 'text-slate-500'}`}
+          >
+            <CircleDot className="w-4 h-4" />
+            Overview
+          </button>
+        </footer>
       </div>
     </div>
   );
