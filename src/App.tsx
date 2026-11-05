@@ -8,6 +8,8 @@ import { MobilePublicLanding } from './components/MobilePublicLanding';
 
 import { ControlTowerView } from './views/ControlTowerView';
 import { DashboardView } from './views/DashboardView';
+import { ManagerDashboardView } from './views/ManagerDashboardView';
+import { AdminDashboardView } from './views/AdminDashboardView';
 import { SecurityDashboardView } from './views/SecurityDashboardView';
 import { TransportCoordinatorDashboardView } from './views/TransportCoordinatorDashboardView';
 import { HubDashboardView } from './views/HubDashboardView';
@@ -110,7 +112,7 @@ const MainLayout: React.FC = () => {
 
     switch (activeTab) {
       case 'control-tower': return <ControlTowerView />;
-      case 'dashboard': return userRole === 'Hub Operator' ? <HubDashboardView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorDashboardView /> : userRole === 'Security / Risk Officer' ? <SecurityDashboardView /> : <DashboardView />;
+      case 'dashboard': return userRole === 'Hub Operator' ? <HubDashboardView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorDashboardView /> : userRole === 'Security / Risk Officer' ? <SecurityDashboardView /> : userRole === 'Administrator' ? <AdminDashboardView /> : userRole === 'Logistics Operations Manager' ? <ManagerDashboardView /> : <DashboardView />;
       case 'shipments': return userRole === 'Hub Operator' ? <HubShipmentsView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorShipmentsView /> : userRole === 'Security / Risk Officer' ? <SecurityShipmentsView /> : <ShipmentsView />;
       case 'tracking': return userRole === 'Hub Operator' ? <HubLiveTrackingView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorLiveTrackingView /> : userRole === 'Security / Risk Officer' ? <SecurityLiveTrackingView /> : <LiveTrackingView />;
       case 'schedules': return <SchedulesView />;
