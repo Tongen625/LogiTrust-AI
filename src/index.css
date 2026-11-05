@@ -1,0 +1,283 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+    --canvas: #f5f8fc;
+    --surface: #ffffff;
+    --surface-soft: #f8fbff;
+    --surface-muted: #edf4fb;
+    --border: #d9e4f2;
+    --border-strong: #c6d6ea;
+    --text: #0f2f57;
+    --text-2: #365a83;
+    --muted: #7086a0;
+    --brand: #1976d2;
+    --brand-dark: #0d4f9b;
+    --brand-soft: #eaf3ff;
+    --navy: #123a6d;
+  }
+  html { color-scheme: light; background: var(--canvas); }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--canvas);
+    color: var(--text);
+    overflow-x: hidden;
+  }
+  code, pre, .font-mono { font-family: var(--font-mono); }
+}
+
+html, body, #root { width:100%; min-height:100%; margin:0; background:var(--canvas); }
+* { box-sizing:border-box; }
+
+::-webkit-scrollbar { width:7px; height:7px; }
+::-webkit-scrollbar-track { background:#edf3f9; }
+::-webkit-scrollbar-thumb { background:#b9c9dc; border-radius:999px; }
+::-webkit-scrollbar-thumb:hover { background:#91a8c3; }
+
+/* Never show the old cyber-grid on the public/light build. */
+.bg-grid-pattern { background-image:none !important; }
+.bg-radial-glow { background:none !important; }
+
+@keyframes pulseGlow { 0%,100%{opacity:.35;transform:scale(1)} 50%{opacity:.8;transform:scale(1.06)} }
+.animate-pulse-glow { animation:pulseGlow 3s ease-in-out infinite; }
+@keyframes radarSweep { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+.animate-radar { animation:radarSweep 4s linear infinite; transform-origin:center; }
+
+/* ==================== APP SHELL ==================== */
+main {
+  background:var(--canvas) !important;
+  color:var(--text) !important;
+}
+
+.app-top-nav {
+  background:rgba(255,255,255,.97) !important;
+  border-color:var(--border) !important;
+  box-shadow:0 6px 20px rgba(25,70,125,.05) !important;
+  backdrop-filter:blur(12px);
+}
+
+.app-sidebar {
+  background:#ffffff !important;
+  border-color:var(--border) !important;
+  color:var(--text) !important;
+  box-shadow:10px 0 30px rgba(25,70,125,.045);
+}
+.app-sidebar [class*="bg-slate-950"],
+.app-sidebar [class*="bg-slate-900"],
+.app-sidebar [class*="bg-slate-800"] { background:#ffffff !important; }
+.app-sidebar [class*="border-slate-"] { border-color:var(--border) !important; }
+.app-sidebar .text-white,
+.app-sidebar .text-slate-100,
+.app-sidebar .text-slate-200 { color:var(--text) !important; }
+.app-sidebar .text-slate-300 { color:var(--text-2) !important; }
+.app-sidebar .text-slate-400,
+.app-sidebar .text-slate-500,
+.app-sidebar .text-slate-600 { color:var(--muted) !important; }
+.app-sidebar .text-cyan-300,
+.app-sidebar .text-cyan-400 { color:var(--brand) !important; }
+.app-sidebar button:hover { background:#f1f6fc !important; color:var(--text) !important; }
+.app-sidebar [class*="bg-cyan-500/10"] {
+  background:var(--brand-soft) !important;
+  border-color:#b8d6f5 !important;
+}
+
+/* ==================== GLOBAL SURFACE CONVERSION ==================== */
+/* Convert all slate dark panels to deliberate light surfaces. */
+main [class*="bg-slate-950"],
+main [class*="bg-slate-900"] {
+  background-color:var(--surface) !important;
+}
+main [class*="bg-slate-800"] { background-color:var(--surface-muted) !important; }
+main [class*="bg-slate-700"] { background-color:#e6eef8 !important; }
+main [class*="bg-slate-600"] { background-color:#d8e5f3 !important; }
+
+/* Remove dark gradients completely — this fixes the ugly half-dark recommendation cards. */
+main [class*="bg-gradient-to"],
+main [class*="from-slate-950"],
+main [class*="from-slate-900"],
+main [class*="to-slate-950"],
+main [class*="to-slate-900"] {
+  background-image:none !important;
+  background-color:var(--surface) !important;
+}
+
+main [class*="border-slate-900"],
+main [class*="border-slate-800"],
+main [class*="border-slate-700"],
+main [class*="border-slate-600"] { border-color:var(--border) !important; }
+
+main .text-white,
+main .text-slate-100 { color:var(--text) !important; }
+main .text-slate-200 { color:#274d78 !important; }
+main .text-slate-300 { color:#43678f !important; }
+main .text-slate-400 { color:#7086a0 !important; }
+main .text-slate-500 { color:#8497ad !important; }
+main .text-slate-600 { color:#9babc0 !important; }
+main .text-slate-950 { color:#0f2f57 !important; }
+
+/* Brand cyan becomes mature teal, not neon. */
+main .text-cyan-200,
+main .text-cyan-300,
+main .text-cyan-400,
+main .text-cyan-500 { color:var(--brand) !important; }
+main [class*="border-cyan-500"],
+main [class*="border-cyan-600"],
+main [class*="border-cyan-700"],
+main [class*="border-cyan-800"],
+main [class*="border-cyan-900"] { border-color:#a9ccef !important; }
+main [class*="bg-cyan-950"],
+main [class*="bg-cyan-900"],
+main [class*="bg-cyan-500/10"],
+main [class*="bg-cyan-500/15"],
+main [class*="bg-cyan-500/20"],
+main [class*="bg-cyan-500/30"] { background-color:#eaf3ff !important; }
+
+/* Semantic alert cards remain distinct but soft. */
+main [class*="bg-rose-950"], main [class*="bg-rose-900"] { background:#fff1f3 !important; }
+main [class*="bg-amber-950"], main [class*="bg-amber-900"] { background:#fff8e8 !important; }
+main [class*="bg-emerald-950"], main [class*="bg-emerald-900"] { background:#eef9f4 !important; }
+main [class*="bg-blue-950"], main [class*="bg-blue-900"] { background:#eef6ff !important; }
+main [class*="bg-purple-950"], main [class*="bg-purple-900"] { background:#f6f1fb !important; }
+
+/* Preserve semantic text colours. */
+main .text-rose-200, main .text-rose-300, main .text-rose-400 { color:#c83e5a !important; }
+main .text-amber-200, main .text-amber-300, main .text-amber-400 { color:#b77905 !important; }
+main .text-emerald-200, main .text-emerald-300, main .text-emerald-400 { color:#16825f !important; }
+main .text-blue-200, main .text-blue-300, main .text-blue-400 { color:#226bb4 !important; }
+main .text-purple-300, main .text-purple-400 { color:#7652a8 !important; }
+
+/* Strong action buttons stay filled and readable. */
+main .bg-emerald-500,
+main .bg-emerald-600,
+main .bg-blue-500,
+main .bg-blue-600,
+main .bg-cyan-500,
+main .bg-cyan-600,
+main .bg-rose-500,
+main .bg-rose-600 { color:#fff !important; }
+main .bg-emerald-500 *, main .bg-emerald-600 *,
+main .bg-blue-500 *, main .bg-blue-600 *,
+main .bg-cyan-500 *, main .bg-cyan-600 *,
+main .bg-rose-500 *, main .bg-rose-600 * { color:#fff !important; }
+
+/* All large cards get consistent premium depth. */
+main .rounded-2xl,
+main .rounded-3xl {
+  box-shadow:0 8px 26px rgba(25,70,125,.06);
+}
+
+/* Tables */
+main table { background:#fff !important; color:var(--text); }
+main thead, main thead tr, main thead [class*="bg-slate"] { background:#eef4fb !important; }
+main tbody tr { border-color:var(--border) !important; }
+main tbody tr:hover { background:#f8fbff !important; }
+
+/* Inputs / dropdowns / dialogs */
+main input, main select, main textarea,
+.app-top-nav input, .app-top-nav select {
+  background:#fff !important;
+  border-color:var(--border-strong) !important;
+  color:var(--text) !important;
+}
+main input::placeholder, .app-top-nav input::placeholder { color:#879ab2 !important; }
+
+/* Top nav internal controls */
+.app-top-nav [class*="bg-slate-950"],
+.app-top-nav [class*="bg-slate-900"],
+.app-top-nav [class*="bg-slate-800"] { background:#fff !important; }
+.app-top-nav [class*="border-slate-"] { border-color:var(--border) !important; }
+.app-top-nav .text-white,
+.app-top-nav .text-slate-100,
+.app-top-nav .text-slate-200 { color:var(--text) !important; }
+.app-top-nav .text-slate-300 { color:var(--text-2) !important; }
+.app-top-nav .text-slate-400,
+.app-top-nav .text-slate-500 { color:var(--muted) !important; }
+.app-top-nav .text-cyan-300,
+.app-top-nav .text-cyan-400 { color:var(--brand) !important; }
+
+/* ==================== LIGHT MAP ==================== */
+.logitrust-map {
+  background:linear-gradient(180deg,#fbfdff 0%,#f0f5fb 100%) !important;
+  border-color:var(--border) !important;
+  box-shadow:0 10px 28px rgba(25,70,125,.06);
+}
+.logitrust-map .map-floating-panel {
+  background:rgba(255,255,255,.96) !important;
+  color:var(--text) !important;
+  border-color:var(--border) !important;
+  box-shadow:0 8px 22px rgba(25,70,125,.08) !important;
+}
+.logitrust-map .map-floating-panel .text-slate-200,
+.logitrust-map .map-floating-panel .text-slate-300 { color:var(--text) !important; }
+.logitrust-map .map-floating-panel .text-slate-400 { color:var(--muted) !important; }
+
+/* ==================== MOBILE PUBLIC LANDING ==================== */
+.public-landing {
+  background:linear-gradient(180deg,#f8fbf9 0%,#eef6f2 48%,#f8fbff 100%) !important;
+  color:var(--text) !important;
+}
+.public-landing [class*="bg-slate-950"],
+.public-landing [class*="bg-slate-900"] { background:#fff !important; }
+.public-landing [class*="border-slate-"] { border-color:var(--border) !important; }
+.public-landing .text-white,
+.public-landing .text-slate-100,
+.public-landing .text-slate-200 { color:var(--text) !important; }
+.public-landing .text-slate-300 { color:var(--text-2) !important; }
+.public-landing .text-slate-400,
+.public-landing .text-slate-500 { color:var(--muted) !important; }
+.public-role-card {
+  background:#fff !important;
+  border-color:var(--border) !important;
+  box-shadow:0 10px 24px rgba(25,70,125,.06);
+}
+.public-role-card:hover { border-color:#96bfe8 !important; transform:translateY(-1px); }
+.public-console-button {
+  background:linear-gradient(135deg,#155fb8,#2588e8) !important;
+  border-color:#155fb8 !important;
+  box-shadow:0 10px 24px rgba(37,136,232,.18);
+}
+.public-console-button, .public-console-button * { color:#fff !important; }
+
+/* ==================== MOBILE APP SHELLS ==================== */
+/* The role apps now become clean white handheld cards instead of black phones. */
+main [class*="max-w-sm"][class*="bg-slate-950"] {
+  background:#fff !important;
+  border-color:#d7e3f1 !important;
+  box-shadow:0 18px 45px rgba(22,66,120,.11) !important;
+}
+main [class*="max-w-sm"] [class*="bg-slate-900"] { background:#f8faf9 !important; }
+main [class*="max-w-sm"] [class*="bg-slate-950"] { background:#fff !important; }
+
+@media (max-width:767px) {
+  body { overflow-x:hidden; }
+  .desktop-console-canvas { min-width:1120px; width:1120px; }
+  main:has(.desktop-console-canvas) { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+}
+@media (min-width:768px) {
+  .desktop-console-canvas { width:100%; min-width:0; }
+}
+
+
+/* ===== FINAL WHITE + BLUE BRAND OVERRIDES ===== */
+.app-sidebar { background:#ffffff !important; border-right:1px solid #d9e4f2 !important; color:#0f2f57 !important; box-shadow:8px 0 24px rgba(25,70,125,.04) !important; }
+.app-sidebar button { color:#365a83 !important; }
+.app-sidebar button:hover { background:#f2f7fd !important; color:#174f91 !important; }
+.app-sidebar button[class*="bg-cyan-500/10"] { background:#eaf3ff !important; border-color:#a9ccef !important; color:#155fb8 !important; }
+.app-sidebar .text-cyan-300,.app-sidebar .text-cyan-400 { color:#1976d2 !important; }
+.app-sidebar .text-slate-950,.app-sidebar .text-slate-900,.app-sidebar .text-slate-800,.app-sidebar .text-slate-700,.app-sidebar .text-slate-600,.app-sidebar .text-slate-500,.app-sidebar .text-slate-400,.app-sidebar .text-slate-300,.app-sidebar .text-slate-200,.app-sidebar .text-slate-100,.app-sidebar .text-white { color:#365a83 !important; }
+.app-sidebar .font-extrabold,.app-sidebar .font-bold { color:#0f2f57 !important; }
+.app-top-nav { background:rgba(255,255,255,.98) !important; border-color:#d9e4f2 !important; box-shadow:0 6px 20px rgba(25,70,125,.05) !important; }
+.app-top-nav .text-cyan-300,.app-top-nav .text-cyan-400 { color:#1976d2 !important; }
+main .text-cyan-200,main .text-cyan-300,main .text-cyan-400,main .text-cyan-500 { color:#1976d2 !important; }
+main [class*="border-cyan-"] { border-color:#a9ccef !important; }
+main [class*="bg-cyan-950"],main [class*="bg-cyan-900"],main [class*="bg-cyan-500/10"],main [class*="bg-cyan-500/15"],main [class*="bg-cyan-500/20"],main [class*="bg-cyan-500/30"] { background:#eaf3ff !important; }
+.public-console-button { background:linear-gradient(135deg,#155fb8,#2588e8) !important; border-color:#155fb8 !important; }
+.public-role-card:hover { border-color:#96bfe8 !important; }
+
+/* Public landing: readable brand blue instead of neon cyan; translucent icon tile on the blue console button */
+.public-landing .text-cyan-200,.public-landing .text-cyan-300,.public-landing .text-cyan-400 { color:var(--brand) !important; }
+.public-console-button [class*="bg-slate-950"] { background:rgba(255,255,255,.18) !important; border-color:rgba(255,255,255,.35) !important; }
+.public-landing .public-console-button * { color:#fff !important; }
