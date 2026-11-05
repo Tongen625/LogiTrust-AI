@@ -199,48 +199,54 @@ export const TransportCoordinatorDashboardView: React.FC = () => {
 
   const pendingRecommendations = recommendations.filter((rec) => rec.status === 'Pending Approval');
 
+
+  const navigateWithFocus = (tab: 'schedules' | 'tracking' | 'shipments', focus: string) => {
+    try { sessionStorage.setItem('coordinatorFocus', focus); } catch {}
+    setActiveTab(tab);
+  };
+
   const kpis = [
     {
       label: 'Active Services',
       value: activeServices.length,
       helper: 'Train and truck services still operating today',
       icon: Activity,
-      action: () => setActiveTab('schedules'),
+      action: () => navigateWithFocus('schedules', 'active-services'),
     },
     {
       label: 'Active Routes',
       value: activeRoutes.length,
       helper: 'Cross-hub corridors currently coordinated',
       icon: Route,
-      action: () => setActiveTab('tracking'),
+      action: () => navigateWithFocus('tracking', 'active-routes'),
     },
     {
       label: 'Delayed / Disrupted',
       value: disruptedServices.length,
       helper: 'Services needing schedule attention',
       icon: Clock3,
-      action: () => setActiveTab('schedules'),
+      action: () => navigateWithFocus('schedules', 'disrupted-services'),
     },
     {
       label: 'Affected Loads',
       value: disruptedServices.length,
       helper: `${affectedShipmentIds.size} shipment(s) inside disrupted loads`,
       icon: Package,
-      action: () => setActiveTab('shipments'),
+      action: () => navigateWithFocus('shipments', 'affected-loads'),
     },
     {
       label: 'Capacity Watch',
       value: capacityWatch.length,
       helper: 'Services at or above 80% utilisation',
       icon: Gauge,
-      action: () => setActiveTab('schedules'),
+      action: () => navigateWithFocus('schedules', 'capacity-watch'),
     },
     {
       label: 'Pending Actions',
       value: pendingActions.length,
       helper: 'Incidents waiting for coordinator action',
       icon: AlertTriangle,
-      action: () => setActiveTab('schedules'),
+      action: () => navigateWithFocus('schedules', 'pending-actions'),
     },
   ];
 

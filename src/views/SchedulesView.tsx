@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLogistics } from '../context/LogisticsContext';
 import { IncidentType, TrainSchedule } from '../types/logistics';
 import { COORDINATOR_ROAD_SERVICES } from '../data/transportCoordinatorDemoData';
@@ -120,6 +120,37 @@ export const SchedulesView: React.FC = () => {
   const [trainStatusNote, setTrainStatusNote] = useState('Manual provider status update');
   const [roadStatusOverrides, setRoadStatusOverrides] = useState<Record<string, { status: UnifiedServiceStatus; delayMinutes: number; note: string }>>({});
   const [selectedIncidentId, setSelectedIncidentId] = useState<string>('');
+  const [dashboardFocus, setDashboardFocus] = useState<string>('');
+  const incidentSectionRef = useRef<HTMLDivElement | null>(null);
+
+
+  useEffect(() => {
+    let focus = '';
+    try {
+      focus = sessionStorage.getItem('coordinatorFocus') || '';
+      sessionStorage.removeItem('coordinatorFocus');
+    } catch {}
+    if (!focus) return;
+    setDashboardFocus(focus);
+    if (focus === 'active-services') {
+      setStatusFilter('All');
+      setTransportFilter('All');
+      setQuery('');
+    } else if (focus === 'disrupted-services') {
+      setStatusFilter('Delayed');
+      setTransportFilter('All');
+      setQuery('');
+    } else if (focus === 'capacity-watch') {
+      setStatusFilter('All');
+      setTransportFilter('All');
+      setQuery('');
+    } else if (focus === 'pending-actions') {
+      setStatusFilter('All');
+      setTransportFilter('All');
+      setQuery('');
+      window.setTimeout(() => incidentSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+    }
+  }, []);
 
   const services = useMemo<UnifiedService[]>(() => {
     const trainRows: UnifiedService[] = trainSchedules.map((train) => ({
@@ -166,9 +197,11 @@ export const SchedulesView: React.FC = () => {
       const matchesStatus = statusFilter === 'All' || service.status === statusFilter;
       const matchesTransport = transportFilter === 'All' || service.transportType === transportFilter;
       const matchesQuery = !normalized || `${service.id} ${service.route} ${service.originHub} ${service.destinationHub}`.toLowerCase().includes(normalized);
-      return matchesStatus && matchesTransport && matchesQuery;
+      const matchesDashboardFocus = dashboardFocus !== 'capacity-watch' || service.utilisationPct >= 80 || !service.capacityAvailable;
+      const matchesActiveFocus = dashboardFocus !== 'active-services' || !['Departed', 'Cancelled'].includes(service.status);
+      return matchesStatus && matchesTransport && matchesQuery && matchesDashboardFocus && matchesActiveFocus;
     });
-  }, [services, query, statusFilter, transportFilter]);
+  }, [services, query, statusFilter, transportFilter, dashboardFocus]);
 
   const selectedService = services.find((service) => service.id === selectedServiceId) || visibleServices[0] || services[0];
 
@@ -482,7 +515,7 @@ export const SchedulesView: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_1fr] gap-5">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div ref={incidentSectionRef} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden scroll-mt-24">
           <div className="p-4 border-b border-slate-200 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold">Transport Incidents</h2>

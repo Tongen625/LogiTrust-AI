@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLogistics } from '../context/LogisticsContext';
 import { buildCoordinatorLoads, CoordinatorLoad } from '../data/coordinatorLoadModel';
 import {
@@ -39,8 +39,23 @@ export const TransportCoordinatorShipmentsView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [transportFilter, setTransportFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [dashboardFocus, setDashboardFocus] = useState('');
   const [expandedLoadId, setExpandedLoadId] = useState<string | null>(loads[0]?.id || null);
   const [selectedShipmentIdLocal, setSelectedShipmentIdLocal] = useState<string | null>(null);
+
+  useEffect(() => {
+    let focus = '';
+    try {
+      focus = sessionStorage.getItem('coordinatorFocus') || '';
+      sessionStorage.removeItem('coordinatorFocus');
+    } catch {}
+    if (focus === 'affected-loads') {
+      setDashboardFocus(focus);
+      setStatusFilter('All');
+      setTransportFilter('All');
+      setQuery('');
+    }
+  }, []);
 
   const visibleLoads = loads.filter((load) => {
     const q = query.trim().toLowerCase();
@@ -52,7 +67,8 @@ export const TransportCoordinatorShipmentsView: React.FC = () => {
     const matchesStatus = statusFilter === 'All'
       || (statusFilter === 'Needs Action' && load.requiresCoordinatorAction)
       || load.status === statusFilter;
-    return matchesQuery && matchesTransport && matchesStatus;
+    const matchesDashboardFocus = dashboardFocus !== 'affected-loads' || load.status === 'Delayed' || load.status === 'Cancelled' || load.incidentIds.length > 0;
+    return matchesQuery && matchesTransport && matchesStatus && matchesDashboardFocus;
   });
 
   const selectedShipment = shipments.find((shipment) => shipment.id === selectedShipmentIdLocal) || null;

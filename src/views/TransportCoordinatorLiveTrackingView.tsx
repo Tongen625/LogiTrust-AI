@@ -98,16 +98,30 @@ export const TransportCoordinatorLiveTrackingView: React.FC = () => {
   const loads = useMemo(() => buildCoordinatorLoads(trainSchedules, shipments, incidents), [trainSchedules, shipments, incidents]);
   const [selectedLoadId, setSelectedLoadId] = useState(loads[0]?.id || '');
   const [sortMode, setSortMode] = useState<SortMode>('priority');
+  const [dashboardFocus, setDashboardFocus] = useState('');
   const [mapFailed, setMapFailed] = useState(false);
   const mapHostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const layerRef = useRef<any>(null);
 
-  const sortedLoads = useMemo(() => [...loads].sort((a, b) => {
+
+  useEffect(() => {
+    let focus = '';
+    try {
+      focus = sessionStorage.getItem('coordinatorFocus') || '';
+      sessionStorage.removeItem('coordinatorFocus');
+    } catch {}
+    if (focus === 'active-routes') {
+      setDashboardFocus(focus);
+      setSortMode('priority');
+    }
+  }, []);
+
+  const sortedLoads = useMemo(() => (dashboardFocus === 'active-routes' ? loads.filter((load) => !['Departed','Cancelled'].includes(load.status)) : [...loads]).sort((a, b) => {
     if (sortMode === 'eta') return timeToMinutes(a.arrival) - timeToMinutes(b.arrival);
     const diff = priorityScore(a) - priorityScore(b);
     return diff !== 0 ? diff : timeToMinutes(a.arrival) - timeToMinutes(b.arrival);
-  }), [loads, sortMode]);
+  }), [loads, sortMode, dashboardFocus]);
 
   const load = loads.find((item) => item.id === selectedLoadId) || sortedLoads[0];
   const assignedShipments = load ? shipments.filter((shipment) => load.shipmentIds.includes(shipment.id)) : [];
