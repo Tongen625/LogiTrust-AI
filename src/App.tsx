@@ -12,6 +12,9 @@ import { TransportCoordinatorDashboardView } from './views/TransportCoordinatorD
 import { HubDashboardView } from './views/HubDashboardView';
 import { ShipmentsView } from './views/ShipmentsView';
 import { HubShipmentsView } from './views/HubShipmentsView';
+import { TransportCoordinatorShipmentsView } from './views/TransportCoordinatorShipmentsView';
+import { TransportCoordinatorLiveTrackingView } from './views/TransportCoordinatorLiveTrackingView';
+import { TransportCoordinatorAuditTrailView } from './views/TransportCoordinatorAuditTrailView';
 import { SchedulesView } from './views/SchedulesView';
 import { SecurityTrustView } from './views/SecurityTrustView';
 import { ApprovalsView } from './views/ApprovalsView';
@@ -103,17 +106,14 @@ const MainLayout: React.FC = () => {
 
     switch (activeTab) {
       case 'control-tower': return <ControlTowerView />;
-      case 'dashboard':
-        if (userRole === 'Hub Operator') return <HubDashboardView />;
-        if (userRole === 'Transport Coordinator') return <TransportCoordinatorDashboardView />;
-        return <DashboardView />;
-      case 'shipments': return userRole === 'Hub Operator' ? <HubShipmentsView /> : <ShipmentsView />;
-      case 'tracking': return userRole === 'Hub Operator' ? <HubLiveTrackingView /> : <LiveTrackingView />;
+      case 'dashboard': return userRole === 'Hub Operator' ? <HubDashboardView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorDashboardView /> : <DashboardView />;
+      case 'shipments': return userRole === 'Hub Operator' ? <HubShipmentsView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorShipmentsView /> : <ShipmentsView />;
+      case 'tracking': return userRole === 'Hub Operator' ? <HubLiveTrackingView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorLiveTrackingView /> : <LiveTrackingView />;
       case 'schedules': return <SchedulesView />;
       case 'security': return <SecurityTrustView />;
       case 'approvals': return <ApprovalsView />;
       case 'hub-ops': return <HubOperationsView />;
-      case 'audit': return userRole === 'Hub Operator' ? <HubAuditTrailView /> : <AuditTrailView />;
+      case 'audit': return userRole === 'Hub Operator' ? <HubAuditTrailView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorAuditTrailView /> : <AuditTrailView />;
       case 'users': return <UsersAdminView />;
       case 'driver-view': return <DriverMobileView />;
       case 'coordinator-app': return <TransportCoordinatorAppView />;
