@@ -8,9 +8,11 @@ import { MobilePublicLanding } from './components/MobilePublicLanding';
 
 import { ControlTowerView } from './views/ControlTowerView';
 import { DashboardView } from './views/DashboardView';
+import { SecurityDashboardView } from './views/SecurityDashboardView';
 import { TransportCoordinatorDashboardView } from './views/TransportCoordinatorDashboardView';
 import { HubDashboardView } from './views/HubDashboardView';
 import { ShipmentsView } from './views/ShipmentsView';
+import { SecurityShipmentsView } from './views/SecurityShipmentsView';
 import { HubShipmentsView } from './views/HubShipmentsView';
 import { TransportCoordinatorShipmentsView } from './views/TransportCoordinatorShipmentsView';
 import { TransportCoordinatorLiveTrackingView } from './views/TransportCoordinatorLiveTrackingView';
@@ -20,10 +22,12 @@ import { SecurityTrustView } from './views/SecurityTrustView';
 import { ApprovalsView } from './views/ApprovalsView';
 import { HubOperationsView } from './views/HubOperationsView';
 import { AuditTrailView } from './views/AuditTrailView';
+import { SecurityAuditTrailView } from './views/SecurityAuditTrailView';
 import { HubAuditTrailView } from './views/HubAuditTrailView';
 import { UsersAdminView } from './views/UsersAdminView';
 import { DriverMobileView } from './views/DriverMobileView';
 import { LiveTrackingView } from './views/LiveTrackingView';
+import { SecurityLiveTrackingView } from './views/SecurityLiveTrackingView';
 import { HubLiveTrackingView } from './views/HubLiveTrackingView';
 import { TransportCoordinatorAppView } from './views/TransportCoordinatorAppView';
 import { SecurityOfficerAppView } from './views/SecurityOfficerAppView';
@@ -106,14 +110,14 @@ const MainLayout: React.FC = () => {
 
     switch (activeTab) {
       case 'control-tower': return <ControlTowerView />;
-      case 'dashboard': return userRole === 'Hub Operator' ? <HubDashboardView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorDashboardView /> : <DashboardView />;
-      case 'shipments': return userRole === 'Hub Operator' ? <HubShipmentsView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorShipmentsView /> : <ShipmentsView />;
-      case 'tracking': return userRole === 'Hub Operator' ? <HubLiveTrackingView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorLiveTrackingView /> : <LiveTrackingView />;
+      case 'dashboard': return userRole === 'Hub Operator' ? <HubDashboardView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorDashboardView /> : userRole === 'Security / Risk Officer' ? <SecurityDashboardView /> : <DashboardView />;
+      case 'shipments': return userRole === 'Hub Operator' ? <HubShipmentsView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorShipmentsView /> : userRole === 'Security / Risk Officer' ? <SecurityShipmentsView /> : <ShipmentsView />;
+      case 'tracking': return userRole === 'Hub Operator' ? <HubLiveTrackingView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorLiveTrackingView /> : userRole === 'Security / Risk Officer' ? <SecurityLiveTrackingView /> : <LiveTrackingView />;
       case 'schedules': return <SchedulesView />;
       case 'security': return <SecurityTrustView />;
       case 'approvals': return <ApprovalsView />;
       case 'hub-ops': return <HubOperationsView />;
-      case 'audit': return userRole === 'Hub Operator' ? <HubAuditTrailView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorAuditTrailView /> : <AuditTrailView />;
+      case 'audit': return userRole === 'Hub Operator' ? <HubAuditTrailView /> : userRole === 'Transport Coordinator' ? <TransportCoordinatorAuditTrailView /> : userRole === 'Security / Risk Officer' ? <SecurityAuditTrailView /> : <AuditTrailView />;
       case 'users': return <UsersAdminView />;
       case 'driver-view': return <DriverMobileView />;
       case 'coordinator-app': return <TransportCoordinatorAppView />;
