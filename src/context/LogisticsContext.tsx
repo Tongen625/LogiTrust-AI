@@ -52,6 +52,25 @@ export const ROLE_PERMITTED_TABS: Record<UserRole, NavigationTab[]> = {
   'Administrator': ['dashboard','users','audit','manager-app'],
 };
 
+
+export const ROLE_LOCKED_TABS: Record<UserRole, NavigationTab[]> = {
+  'Logistics Operations Manager': ['dashboard','manager-app'],
+  'Security / Risk Officer': ['dashboard','security-app'],
+  'Hub Operator': ['dashboard','hub-app'],
+  'Transport Coordinator': ['dashboard','coordinator-app'],
+  'Driver': ['driver-view'],
+  'Administrator': ['dashboard','users','audit','manager-app'],
+};
+
+export const ROLE_ASSIGNABLE_TABS: Record<UserRole, NavigationTab[]> = {
+  'Logistics Operations Manager': ['control-tower','dashboard','shipments','tracking','approvals','schedules','audit','manager-app'],
+  'Security / Risk Officer': ['dashboard','shipments','tracking','security','audit','security-app'],
+  'Hub Operator': ['dashboard','shipments','tracking','hub-ops','audit','hub-app'],
+  'Transport Coordinator': ['dashboard','shipments','tracking','schedules','audit','coordinator-app'],
+  'Driver': ['driver-view'],
+  'Administrator': ['dashboard','users','audit','manager-app'],
+};
+
 export const ROLE_DEFAULT_TAB: Record<UserRole, NavigationTab> = {
   'Logistics Operations Manager': 'control-tower',
   'Security / Risk Officer': 'security',
@@ -68,6 +87,9 @@ interface LogisticsContextType {
   permittedTabs: NavigationTab[];
   switchRole: (role: UserRole) => void;
   isTabPermitted: (tab: NavigationTab) => boolean;
+  rolePermissions: Record<UserRole, NavigationTab[]>;
+  updateRolePermission: (role: UserRole, tab: NavigationTab, enabled: boolean) => void;
+  resetRolePermissions: () => void;
 
   activeTab: NavigationTab;
   setActiveTab: (tab: NavigationTab) => void;
@@ -141,7 +163,15 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [activeTab, setActiveTabState] = useState<NavigationTab>('control-tower');
 
   const currentUser = USER_PROFILES[userRole];
-  const permittedTabs = ROLE_PERMITTED_TABS[userRole] || [];
+  const [rolePermissions, setRolePermissions] = useState<Record<UserRole, NavigationTab[]>>(() => ({
+    'Logistics Operations Manager': [...ROLE_PERMITTED_TABS['Logistics Operations Manager']],
+    'Security / Risk Officer': [...ROLE_PERMITTED_TABS['Security / Risk Officer']],
+    'Hub Operator': [...ROLE_PERMITTED_TABS['Hub Operator']],
+    'Transport Coordinator': [...ROLE_PERMITTED_TABS['Transport Coordinator']],
+    'Driver': [...ROLE_PERMITTED_TABS['Driver']],
+    'Administrator': [...ROLE_PERMITTED_TABS['Administrator']],
+  }));
+  const permittedTabs = rolePermissions[userRole] || [];
 
   const isTabPermitted = (tab: NavigationTab) => {
     return permittedTabs.includes(tab);
@@ -343,6 +373,52 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   };
 
   const clearNotification = () => setNotification(null);
+
+  const updateRolePermission = (role: UserRole, tab: NavigationTab, enabled: boolean) => {
+    if (userRole !== 'Administrator') {
+      showToast('⛔ Only the Administrator can change workspace privileges.');
+      return;
+    }
+    if (!ROLE_ASSIGNABLE_TABS[role].includes(tab)) {
+      showToast(`⛔ ${tab} is outside the approved workspace scope for ${role}.`);
+      return;
+    }
+    if (!enabled && ROLE_LOCKED_TABS[role].includes(tab)) {
+      showToast(`⛔ ${tab} is a required privilege for ${role} and cannot be removed.`);
+      return;
+    }
+    setRolePermissions((prev) => {
+      const current = prev[role] || [];
+      const next = enabled ? Array.from(new Set([...current, tab])) : current.filter((item) => item !== tab);
+      return { ...prev, [role]: next };
+    });
+    logAudit(
+      currentUser.name,
+      userRole,
+      `RBAC Privilege ${enabled ? 'Granted' : 'Revoked'}: ${role} / ${tab}`,
+      `Administrator changed workspace access for ${role}.`,
+      'No AI decision',
+      enabled ? 'PRIVILEGE GRANTED' : 'PRIVILEGE REVOKED',
+      'RBAC matrix updated'
+    );
+    showToast(`${enabled ? '✅ Granted' : '🔒 Revoked'} ${tab} access for ${role}.`);
+  };
+
+  const resetRolePermissions = () => {
+    if (userRole !== 'Administrator') {
+      showToast('⛔ Only the Administrator can reset workspace privileges.');
+      return;
+    }
+    setRolePermissions({
+      'Logistics Operations Manager': [...ROLE_PERMITTED_TABS['Logistics Operations Manager']],
+      'Security / Risk Officer': [...ROLE_PERMITTED_TABS['Security / Risk Officer']],
+      'Hub Operator': [...ROLE_PERMITTED_TABS['Hub Operator']],
+      'Transport Coordinator': [...ROLE_PERMITTED_TABS['Transport Coordinator']],
+      'Driver': [...ROLE_PERMITTED_TABS['Driver']],
+      'Administrator': [...ROLE_PERMITTED_TABS['Administrator']],
+    });
+    showToast('RBAC workspace privileges restored to the approved baseline.');
+  };
 
   const setActiveTab = (tab: NavigationTab) => {
     if (!isTabPermitted(tab)) {
@@ -862,7 +938,7 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
 
   const addShipment = (input: Partial<Shipment> & { id?: string }) => {
-    if (!requireRole(['Logistics Operations Manager', 'Transport Coordinator', 'Administrator'], 'add operational shipments')) return;
+    if (!requireRole(['Logistics Operations Manager', 'Transport Coordinator'], 'add operational shipments')) return;
 
     const id = input.id?.trim().toUpperCase() || `MY${Math.floor(100000 + Math.random() * 899999)}`;
     if (shipments.some((s) => s.id === id)) {
@@ -1327,6 +1403,14 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setHandoffs([...HUB_DEMO_HANDOFFS]);
     setAuditLogs([...INITIAL_AUDIT_LOGS, ...HUB_DEMO_AUDIT_LOGS]);
     setIncidents(INITIAL_MOCK_INCIDENTS);
+    setRolePermissions({
+      'Logistics Operations Manager': [...ROLE_PERMITTED_TABS['Logistics Operations Manager']],
+      'Security / Risk Officer': [...ROLE_PERMITTED_TABS['Security / Risk Officer']],
+      'Hub Operator': [...ROLE_PERMITTED_TABS['Hub Operator']],
+      'Transport Coordinator': [...ROLE_PERMITTED_TABS['Transport Coordinator']],
+      'Driver': [...ROLE_PERMITTED_TABS['Driver']],
+      'Administrator': [...ROLE_PERMITTED_TABS['Administrator']],
+    });
     setHubManifests([
       {
         id: 'MAN-T105-PJ',
@@ -1353,6 +1437,9 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         permittedTabs,
         switchRole,
         isTabPermitted,
+        rolePermissions,
+        updateRolePermission,
+        resetRolePermissions,
 
         activeTab,
         setActiveTab,
