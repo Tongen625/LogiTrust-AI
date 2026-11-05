@@ -32,15 +32,17 @@ export const SidebarNavigation: React.FC<Props> = ({ mobileOpen = false, onClose
   } = useLogistics();
 
   const pendingApprovalsCount = recommendations.filter((r) => r.status === 'Pending Approval').length;
-  const activeAlertsCount = securityAlerts.filter((a) => a.status === 'Open' || a.status === 'Verification Requested').length;
+  const activeAlertsCount = securityAlerts.filter((a) => a.status !== 'Resolved').length;
+
+  const securityWorkspace = userRole === 'Security / Risk Officer';
 
   const allNavItems = [
-    { id: 'dashboard' as NavigationTab, label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'dashboard' as NavigationTab, label: securityWorkspace ? 'Security Overview' : 'Dashboard', icon: LayoutDashboard },
     { id: 'control-tower' as NavigationTab, label: 'AI Control Tower', icon: Radio, highlight: true },
-    { id: 'shipments' as NavigationTab, label: 'Shipments', icon: Package },
-    { id: 'tracking' as NavigationTab, label: 'Live Tracking', icon: Compass },
+    { id: 'shipments' as NavigationTab, label: securityWorkspace ? 'Risk Cases' : 'Shipments', icon: Package },
+    { id: 'tracking' as NavigationTab, label: securityWorkspace ? 'Risk Tracking' : 'Live Tracking', icon: Compass },
     { id: 'schedules' as NavigationTab, label: 'Schedules & Fleet', icon: Calendar },
-    { id: 'security' as NavigationTab, label: 'Security & Digital Trust', icon: ShieldAlert, badge: activeAlertsCount || undefined, badgeColor: 'bg-rose-500' },
+    { id: 'security' as NavigationTab, label: securityWorkspace ? 'Investigations' : 'Security & Digital Trust', icon: ShieldAlert, badge: activeAlertsCount || undefined, badgeColor: 'bg-rose-500' },
     { id: 'approvals' as NavigationTab, label: 'AI Approvals', icon: CheckSquare, badge: pendingApprovalsCount || undefined, badgeColor: 'bg-cyan-500' },
     { id: 'hub-ops' as NavigationTab, label: 'Hub Operations', icon: Building2 },
     { id: 'coordinator-app' as NavigationTab, label: 'Coordinator App', icon: Smartphone },
@@ -48,7 +50,7 @@ export const SidebarNavigation: React.FC<Props> = ({ mobileOpen = false, onClose
     { id: 'hub-app' as NavigationTab, label: 'Hub Operator App', icon: Smartphone },
     { id: 'manager-app' as NavigationTab, label: 'Admin / Manager App', icon: Smartphone },
     { id: 'driver-view' as NavigationTab, label: 'Driver App', icon: Smartphone },
-    { id: 'audit' as NavigationTab, label: 'Audit Trail', icon: FileText },
+    { id: 'audit' as NavigationTab, label: securityWorkspace ? 'Security Audit Trail' : 'Audit Trail', icon: FileText },
     { id: 'users' as NavigationTab, label: 'Users & Admin', icon: Users },
   ];
 
@@ -61,25 +63,25 @@ export const SidebarNavigation: React.FC<Props> = ({ mobileOpen = false, onClose
 
   const sidebar = (
     <aside className="app-sidebar w-[280px] lg:w-64 bg-white border-r border-blue-100 flex flex-col shrink-0 h-full min-h-0 text-slate-700 select-none">
-      <div className="p-4 border-b border-slate-800 flex items-center gap-3">
+      <div className="p-4 border-b border-blue-100 flex items-center gap-3">
         <img src="/logitrust-logo.jpeg" alt="LogiTrust AI" className="w-11 h-11 rounded-xl object-cover bg-white border border-blue-100 shadow-sm" />
         <div className="min-w-0 flex-1">
           <div className="font-extrabold text-[#0f2f57] leading-tight">LogiTrust <span className="text-[#1976d2]">AI</span></div>
           <div className="text-[10px] text-[#7086a0] leading-tight mt-0.5">Secure Logistics & Digital Trust</div>
         </div>
-        <button onClick={onCloseMobile} className="lg:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900" aria-label="Close navigation">
+        <button onClick={onCloseMobile} className="lg:hidden p-2 rounded-lg text-slate-400 hover:text-blue-700 hover:bg-blue-50" aria-label="Close navigation">
           <X className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="px-3 py-3 border-b border-slate-800 text-[10px] font-mono text-slate-500">
+      <div className="px-3 py-3 border-b border-blue-100 text-[10px] font-mono text-slate-500">
         <div className="flex justify-between gap-2">
           <span>WORKSPACE:</span>
-          <span className="text-cyan-400 font-bold truncate max-w-[160px]">{userRole}</span>
+          <span className="text-blue-600 font-bold truncate max-w-[160px]">{userRole}</span>
         </div>
         <div className="flex justify-between mt-2 gap-2">
           <span>PERMITTED CONSOLES</span>
-          <span className="text-cyan-400 font-bold">{permittedTabs.length} AUTHORIZED</span>
+          <span className="text-blue-600 font-bold">{permittedTabs.length} AUTHORIZED</span>
         </div>
       </div>
 
@@ -91,9 +93,9 @@ export const SidebarNavigation: React.FC<Props> = ({ mobileOpen = false, onClose
             <button
               key={item.id}
               onClick={() => go(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition border ${active ? 'bg-cyan-500/10 border-cyan-500/40 text-cyan-300' : 'border-transparent text-slate-300 hover:bg-slate-900 hover:text-white'}`}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition border ${active ? 'bg-blue-50 border-blue-200 text-blue-700' : 'border-transparent text-slate-600 hover:bg-blue-50 hover:text-blue-700'}`}
             >
-              <Icon className={`w-4 h-4 shrink-0 ${active || item.highlight ? 'text-cyan-400' : 'text-slate-500'}`} />
+              <Icon className={`w-4 h-4 shrink-0 ${active || item.highlight ? 'text-blue-600' : 'text-slate-500'}`} />
               <span className="text-sm font-medium flex-1 truncate">{item.label}</span>
               {item.badge ? <span className={`${item.badgeColor} text-slate-950 min-w-5 h-5 px-1 rounded-full flex items-center justify-center text-[10px] font-extrabold`}>{item.badge}</span> : null}
             </button>
@@ -101,15 +103,15 @@ export const SidebarNavigation: React.FC<Props> = ({ mobileOpen = false, onClose
         })}
       </nav>
 
-      <div className="p-3 border-t border-slate-800 space-y-2">
-        <div className="rounded-xl bg-slate-900 border border-slate-800 p-2.5 flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/25 text-cyan-300 font-bold font-mono text-xs flex items-center justify-center">{currentUser.avatarInitials}</div>
+      <div className="p-3 border-t border-blue-100 space-y-2">
+        <div className="rounded-xl bg-blue-50 border border-blue-100 p-2.5 flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-cyan-500/15 border border-cyan-500/25 text-blue-700 font-bold font-mono text-xs flex items-center justify-center">{currentUser.avatarInitials}</div>
           <div className="min-w-0">
-            <div className="text-xs font-bold text-white truncate">{currentUser.name}</div>
-            <div className="text-[10px] text-cyan-400 font-mono truncate">{currentUser.department} • {currentUser.employeeId}</div>
+            <div className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</div>
+            <div className="text-[10px] text-blue-600 font-mono truncate">{currentUser.callsign} • {currentUser.id}</div>
           </div>
         </div>
-        <div className="text-[9px] text-slate-600 font-mono">LogiTrust AI v2.7 • ROLE ACCESS ACTIVE</div>
+        <div className="text-[9px] text-slate-400 font-mono">LogiTrust AI v2.7 • ROLE ACCESS ACTIVE</div>
       </div>
     </aside>
   );
