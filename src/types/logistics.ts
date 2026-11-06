@@ -192,6 +192,7 @@ export interface TrainSchedule {
   destHub: string;
   departure: string;
   arrival: string;
+  serviceDate?: string; // YYYY-MM-DD; existing feeds default to today when omitted
   status: 'On Time' | 'Delayed' | 'Departed' | 'Cancelled';
   delayMinutes: number;
   capacityAvailable: boolean;
