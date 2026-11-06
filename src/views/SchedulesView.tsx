@@ -13,6 +13,7 @@ import {
   Filter,
   MapPin,
   Plus,
+  Sparkles,
   Search,
   SlidersHorizontal,
   Train,
@@ -33,6 +34,7 @@ interface UnifiedService {
   destinationHub: string;
   departure: string;
   arrival: string;
+  serviceDate: string;
   status: UnifiedServiceStatus;
   delayMinutes: number;
   utilisationPct: number;
@@ -72,6 +74,17 @@ const transportIcon = (type: UnifiedTransportType) => {
   return <BusFront className="w-4 h-4" />;
 };
 
+const todayIso = () => {
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  return new Date(now.getTime() - offset * 60_000).toISOString().slice(0, 10);
+};
+
+const toMinutes = (time: string) => {
+  const [hour, minute] = time.split(':').map(Number);
+  return (hour || 0) * 60 + (minute || 0);
+};
+
 export const SchedulesView: React.FC = () => {
   const {
     trainSchedules,
@@ -84,6 +97,7 @@ export const SchedulesView: React.FC = () => {
     addIncident,
     submitRecommendationForManagerApproval,
     applyCoordinatorOperationalRecovery,
+    approveLoadSchedulePlan,
     setSelectedShipmentId,
     setActiveTab,
   } = useLogistics();
@@ -93,6 +107,10 @@ export const SchedulesView: React.FC = () => {
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('All');
   const [transportFilter, setTransportFilter] = useState<TransportFilter>('All');
+  const [dateFilter, setDateFilter] = useState(todayIso());
+  const [plannerCorridor, setPlannerCorridor] = useState('');
+  const [addShipmentId, setAddShipmentId] = useState('');
+  const [generatedPlan, setGeneratedPlan] = useState<{ loadId: string; shipmentIds: string[]; serviceId: string; eta: string; score: number; reasons: string[] } | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState('');
   const [showIncidentModal, setShowIncidentModal] = useState(false);
   const [showTrainModal, setShowTrainModal] = useState(false);
@@ -112,6 +130,7 @@ export const SchedulesView: React.FC = () => {
   const [newTrainDestination, setNewTrainDestination] = useState('hub-pj');
   const [newTrainDeparture, setNewTrainDeparture] = useState('14:00');
   const [newTrainArrival, setNewTrainArrival] = useState('17:15');
+  const [newTrainDate, setNewTrainDate] = useState(todayIso());
   const [newTrainCapacity, setNewTrainCapacity] = useState('450');
   const [newTrainUtilisation, setNewTrainUtilisation] = useState('40');
 
@@ -161,6 +180,7 @@ export const SchedulesView: React.FC = () => {
       destinationHub: train.destHub,
       departure: train.departure,
       arrival: train.arrival,
+      serviceDate: train.serviceDate || todayIso(),
       status: train.status,
       delayMinutes: train.delayMinutes,
       utilisationPct: train.currentUtilisationPct,
@@ -179,6 +199,7 @@ export const SchedulesView: React.FC = () => {
       destinationHub: service.destinationHub,
       departure: service.departure,
       arrival: service.arrival,
+      serviceDate: todayIso(),
       status: roadStatusOverrides[service.id]?.status || service.status,
       delayMinutes: roadStatusOverrides[service.id]?.delayMinutes ?? service.delayMinutes,
       utilisationPct: service.utilisationPct,
@@ -193,15 +214,18 @@ export const SchedulesView: React.FC = () => {
 
   const visibleServices = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    return services.filter((service) => {
-      const matchesStatus = statusFilter === 'All' || service.status === statusFilter;
-      const matchesTransport = transportFilter === 'All' || service.transportType === transportFilter;
-      const matchesQuery = !normalized || `${service.id} ${service.route} ${service.originHub} ${service.destinationHub}`.toLowerCase().includes(normalized);
-      const matchesDashboardFocus = dashboardFocus !== 'capacity-watch' || service.utilisationPct >= 80 || !service.capacityAvailable;
-      const matchesActiveFocus = dashboardFocus !== 'active-services' || !['Departed', 'Cancelled'].includes(service.status);
-      return matchesStatus && matchesTransport && matchesQuery && matchesDashboardFocus && matchesActiveFocus;
-    });
-  }, [services, query, statusFilter, transportFilter, dashboardFocus]);
+    return services
+      .filter((service) => {
+        const matchesStatus = statusFilter === 'All' || service.status === statusFilter;
+        const matchesTransport = transportFilter === 'All' || service.transportType === transportFilter;
+        const matchesDate = !dateFilter || service.serviceDate === dateFilter;
+        const matchesQuery = !normalized || `${service.id} ${service.route} ${service.originHub} ${service.destinationHub}`.toLowerCase().includes(normalized);
+        const matchesDashboardFocus = dashboardFocus !== 'capacity-watch' || service.utilisationPct >= 80 || !service.capacityAvailable;
+        const matchesActiveFocus = dashboardFocus !== 'active-services' || !['Departed', 'Cancelled'].includes(service.status);
+        return matchesStatus && matchesTransport && matchesDate && matchesQuery && matchesDashboardFocus && matchesActiveFocus;
+      })
+      .sort((a, b) => toMinutes(a.departure) - toMinutes(b.departure));
+  }, [services, query, statusFilter, transportFilter, dateFilter, dashboardFocus]);
 
   const selectedService = services.find((service) => service.id === selectedServiceId) || visibleServices[0] || services[0];
 
@@ -301,6 +325,7 @@ export const SchedulesView: React.FC = () => {
       destHub: newTrainDestination,
       departure: newTrainDeparture,
       arrival: newTrainArrival,
+      serviceDate: newTrainDate,
       status: 'On Time',
       delayMinutes: 0,
       capacityAvailable: true,
@@ -338,6 +363,145 @@ export const SchedulesView: React.FC = () => {
       }));
     }
     setShowTrainStatusModal(false);
+  };
+
+  const plannableShipments = useMemo(() => shipments.filter((shipment) =>
+    ['Origin Hub', 'Route & Schedule Planning'].includes(shipment.status) && !shipment.hasSecurityAlert
+  ), [shipments]);
+
+  const corridorOptions = useMemo(() => {
+    const map = new Map<string, { key: string; originHub: string; destinationHub: string; label: string; shipmentIds: string[] }>();
+    plannableShipments.forEach((shipment) => {
+      const key = `${shipment.originHub}__${shipment.destinationHub}`;
+      const current = map.get(key) || {
+        key,
+        originHub: shipment.originHub,
+        destinationHub: shipment.destinationHub,
+        label: `${shipment.origin} → ${shipment.destination}`,
+        shipmentIds: [],
+      };
+      current.shipmentIds.push(shipment.id);
+      map.set(key, current);
+    });
+    return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
+  }, [plannableShipments]);
+
+  useEffect(() => {
+    if (!plannerCorridor && corridorOptions.length) setPlannerCorridor(corridorOptions[0].key);
+  }, [plannerCorridor, corridorOptions]);
+
+  const corridorShipments = useMemo(() => {
+    const corridor = corridorOptions.find((item) => item.key === plannerCorridor);
+    if (!corridor) return [];
+    return plannableShipments.filter((shipment) => corridor.shipmentIds.includes(shipment.id));
+  }, [corridorOptions, plannerCorridor, plannableShipments]);
+
+  const shipmentParcelIds = (shipment: any) => {
+    if (shipment.parcelIds?.length) return shipment.parcelIds;
+    if (shipment.parcels?.length) return shipment.parcels.map((parcel: any) => parcel.id);
+    const count = shipment.parcelCount || 1;
+    return Array.from({ length: count }, (_, index) => `P-${shipment.id}-${String(index + 1).padStart(2, '0')}`);
+  };
+
+  const generateSchedulePlan = () => {
+    const corridor = corridorOptions.find((item) => item.key === plannerCorridor);
+    if (!corridor || corridorShipments.length === 0) {
+      setGeneratedPlan(null);
+      return;
+    }
+
+    const priorityWeight: Record<string, number> = { 'High-Value': 4, 'Cold-Chain': 4, Express: 3, Standard: 1 };
+    const suggestedShipments = [...corridorShipments]
+      .sort((a, b) => (priorityWeight[b.priority] || 0) - (priorityWeight[a.priority] || 0) || a.targetArrival.localeCompare(b.targetArrival))
+      .slice(0, Math.min(4, corridorShipments.length));
+
+    const totalWeightKg = suggestedShipments.reduce((sum, shipment) => sum + (shipment.weightKg || 0), 0);
+    const active = services.filter((service) =>
+      service.serviceDate === dateFilter &&
+      !['Cancelled', 'Departed'].includes(service.status) &&
+      service.capacityAvailable &&
+      service.utilisationPct < 95
+    );
+
+    const cityTokens = (value: string) => value.toLowerCase().split(/[^a-z0-9]+/).filter((token) => token.length > 3);
+    const originTokens = cityTokens(`${corridor.originHub} ${suggestedShipments[0]?.origin || ''}`);
+    const destinationTokens = cityTokens(`${corridor.destinationHub} ${suggestedShipments[0]?.destination || ''}`);
+
+    const ranked = active.map((service) => {
+      const routeText = `${service.route} ${service.originHub} ${service.destinationHub}`.toLowerCase();
+      const routeMatch = originTokens.some((token) => routeText.includes(token)) && destinationTokens.some((token) => routeText.includes(token));
+      const score =
+        (routeMatch ? 50 : 0) +
+        (service.status === 'On Time' ? 25 : service.status === 'Delayed' ? 5 : 0) +
+        Math.max(0, 20 - Math.round(service.utilisationPct / 5)) +
+        (totalWeightKg < 3000 ? 5 : 0);
+      return { service, score, routeMatch };
+    }).sort((a, b) => b.score - a.score || toMinutes(a.service.arrival) - toMinutes(b.service.arrival));
+
+    const best = ranked[0];
+    if (!best) {
+      setGeneratedPlan(null);
+      return;
+    }
+
+    const nextNumber = Math.max(1, services.reduce((max, service) => {
+      const match = service.id.match(/(\d+)/);
+      return Math.max(max, match ? Number(match[1]) : 0);
+    }, 0) + 1);
+    const loadId = `LOAD-${String(nextNumber).padStart(3, '0')}`;
+    const parcelCount = suggestedShipments.reduce((sum, shipment) => sum + shipmentParcelIds(shipment).length, 0);
+    const reasons = [
+      `${suggestedShipments.length} compatible shipment(s) on the same corridor`,
+      `${parcelCount} parcel(s) inherited from selected shipments`,
+      `${best.service.status} service with ${100 - best.service.utilisationPct}% capacity available`,
+      `Departure ${best.service.departure}, arrival ${best.service.arrival}`,
+    ];
+
+    setGeneratedPlan({
+      loadId,
+      shipmentIds: suggestedShipments.map((shipment) => shipment.id),
+      serviceId: best.service.id,
+      eta: best.service.arrival,
+      score: Math.min(98, best.score),
+      reasons,
+    });
+    setAddShipmentId('');
+  };
+
+  const removeShipmentFromPlan = (shipmentId: string) => {
+    setGeneratedPlan((current) => {
+      if (!current) return current;
+      const shipmentIds = current.shipmentIds.filter((id) => id !== shipmentId);
+      return shipmentIds.length ? { ...current, shipmentIds } : null;
+    });
+  };
+
+  const addShipmentToPlan = () => {
+    if (!generatedPlan || !addShipmentId || generatedPlan.shipmentIds.includes(addShipmentId)) return;
+    const shipment = corridorShipments.find((item) => item.id === addShipmentId);
+    if (!shipment) return;
+    setGeneratedPlan({ ...generatedPlan, shipmentIds: [...generatedPlan.shipmentIds, shipment.id] });
+    setAddShipmentId('');
+  };
+
+  const plannedShipments = generatedPlan
+    ? shipments.filter((shipment) => generatedPlan.shipmentIds.includes(shipment.id))
+    : [];
+  const plannedParcelCount = plannedShipments.reduce((sum, shipment) => sum + shipmentParcelIds(shipment).length, 0);
+  const plannedWeightKg = plannedShipments.reduce((sum, shipment) => sum + (shipment.weightKg || 0), 0);
+  const compatibleToAdd = corridorShipments.filter((shipment) => !generatedPlan?.shipmentIds.includes(shipment.id));
+
+  const approveGeneratedPlan = () => {
+    if (!generatedPlan || generatedPlan.shipmentIds.length === 0) return;
+    approveLoadSchedulePlan(
+      generatedPlan.loadId,
+      generatedPlan.shipmentIds,
+      generatedPlan.serviceId,
+      generatedPlan.eta,
+      `Coordinator approved the edited Scheduling Agent load plan after checking corridor, shipment mix, parcels, timing and capacity. Score ${generatedPlan.score}.`
+    );
+    setGeneratedPlan(null);
+    setAddShipmentId('');
   };
 
   const selectedAffectedShipments = selectedService
@@ -390,6 +554,117 @@ export const SchedulesView: React.FC = () => {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-violet-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-violet-100 bg-violet-50/70 flex items-start gap-3">
+          <Sparkles className="w-5 h-5 text-violet-700 shrink-0 mt-0.5" />
+          <div>
+            <div className="text-sm font-semibold text-violet-950">AI Load & Schedule Planner</div>
+            <div className="text-xs text-violet-800 mt-1">The Scheduling Agent proposes a load from compatible shipments. You may add or remove whole shipments before approving the transport service. Parcels follow their shipment automatically.</div>
+          </div>
+        </div>
+
+        <div className="p-4 grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-3 items-end">
+          <label className="space-y-1">
+            <span className="text-xs font-medium text-slate-600">Planning corridor</span>
+            <select
+              value={plannerCorridor}
+              onChange={(event) => { setPlannerCorridor(event.target.value); setGeneratedPlan(null); setAddShipmentId(''); }}
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white"
+            >
+              {corridorOptions.map((corridor) => (
+                <option key={corridor.key} value={corridor.key}>{corridor.label} · {corridor.shipmentIds.length} shipment(s)</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={!plannerCorridor || corridorShipments.length === 0}
+            onClick={generateSchedulePlan}
+            className="px-4 py-2.5 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 disabled:opacity-40 flex items-center justify-center gap-2"
+          >
+            <Sparkles className="w-4 h-4" /> Build Recommended Load
+          </button>
+        </div>
+
+        {generatedPlan && (
+          <div className="mx-4 mb-4 rounded-2xl border border-violet-200 bg-violet-50 p-4 space-y-4">
+            <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
+              <div>
+                <div className="text-xs font-semibold text-violet-800">SCHEDULING AGENT PROPOSAL</div>
+                <div className="text-xl font-bold text-slate-950 mt-1">{generatedPlan.loadId} → {generatedPlan.serviceId}</div>
+                <div className="text-sm text-slate-600 mt-1">
+                  {generatedPlan.shipmentIds.length} shipment(s) · {plannedParcelCount} parcel(s) · {(plannedWeightKg / 1000).toFixed(2)} t · ETA {generatedPlan.eta}
+                </div>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {generatedPlan.reasons.map((reason) => <span key={reason} className="px-2.5 py-1 rounded-full bg-white border border-violet-200 text-xs text-violet-900">{reason}</span>)}
+                </div>
+              </div>
+              {canEdit && (
+                <div className="flex gap-2 shrink-0">
+                  <button type="button" onClick={() => setGeneratedPlan(null)} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-700 text-sm font-semibold">Discard</button>
+                  <button type="button" onClick={approveGeneratedPlan} className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" /> Approve Load & Schedule
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-violet-200 bg-white overflow-hidden">
+              <div className="px-3 py-2.5 border-b border-slate-100 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Shipments in Load</div>
+                  <div className="text-xs text-slate-500">Coordinator may edit shipment membership. Parcel membership is inherited and verified later by Hub Operations.</div>
+                </div>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {plannedShipments.map((shipment) => {
+                  const parcelIds = shipmentParcelIds(shipment);
+                  return (
+                    <div key={shipment.id} className="p-3 flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-slate-900">{shipment.id}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{shipment.priority}</span>
+                          <span className="text-xs text-slate-500">{shipment.weightKg} kg</span>
+                        </div>
+                        <div className="text-xs text-slate-500 mt-1">{shipment.origin} → {shipment.destination}</div>
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {parcelIds.slice(0, 6).map((parcelId) => <span key={parcelId} className="px-2 py-1 rounded-lg bg-blue-50 text-blue-700 text-[11px] border border-blue-100">{parcelId}</span>)}
+                          {parcelIds.length > 6 && <span className="px-2 py-1 rounded-lg bg-slate-50 text-slate-500 text-[11px]">+{parcelIds.length - 6} more</span>}
+                        </div>
+                      </div>
+                      {canEdit && (
+                        <button type="button" onClick={() => removeShipmentFromPlan(shipment.id)} className="px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-xs font-semibold flex items-center gap-1.5 shrink-0">
+                          <X className="w-3.5 h-3.5" /> Remove Shipment
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {canEdit && compatibleToAdd.length > 0 && (
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="text-sm font-semibold text-slate-900">Add another compatible shipment</div>
+                <div className="text-xs text-slate-500 mt-0.5">Only shipments on the same origin-to-destination corridor are available.</div>
+                <div className="flex flex-col md:flex-row gap-2 mt-3">
+                  <select value={addShipmentId} onChange={(event) => setAddShipmentId(event.target.value)} className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm bg-white">
+                    <option value="">Select shipment</option>
+                    {compatibleToAdd.map((shipment) => (
+                      <option key={shipment.id} value={shipment.id}>{shipment.id} · {shipmentParcelIds(shipment).length} parcels · {shipment.weightKg} kg · {shipment.priority}</option>
+                    ))}
+                  </select>
+                  <button type="button" disabled={!addShipmentId} onClick={addShipmentToPlan} className="px-4 py-2 rounded-xl border border-blue-200 bg-blue-50 text-blue-700 text-sm font-semibold disabled:opacity-40 flex items-center justify-center gap-2">
+                    <Plus className="w-4 h-4" /> Add Shipment
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-[1.75fr_0.65fr] gap-5">
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-200">
@@ -398,11 +673,12 @@ export const SchedulesView: React.FC = () => {
                 <h2 className="text-lg font-bold">Transport Services</h2>
                 <p className="text-xs text-slate-500 mt-1">Train, truck and intermodal schedules managed across the network.</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-[220px_135px_135px] gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[210px_145px_145px_145px] gap-2">
                 <div className="relative">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search service or route" className="w-full border border-slate-200 rounded-xl pl-9 pr-3 py-2 text-xs outline-none focus:border-blue-400" />
                 </div>
+                <input type="date" value={dateFilter} onChange={(event) => { setDateFilter(event.target.value); setGeneratedPlan(null); }} className="border border-slate-200 rounded-xl px-3 py-2 text-xs bg-white outline-none focus:border-blue-400" title="Service date" />
                 <div className="relative">
                   <Filter className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <select value={transportFilter} onChange={(event) => setTransportFilter(event.target.value as TransportFilter)} className="w-full appearance-none border border-slate-200 rounded-xl pl-9 pr-2 py-2 text-xs bg-white outline-none focus:border-blue-400">
@@ -452,7 +728,7 @@ export const SchedulesView: React.FC = () => {
                       <div className="font-medium text-slate-800">{service.route}</div>
                     </td>
                     <td className="px-3 py-3 text-xs text-slate-600">
-                      <div>{service.departure} <ArrowRight className="w-3 h-3 inline mx-1" /> {service.arrival}</div>
+                      <div className="font-medium text-slate-700">{service.departure} <ArrowRight className="w-3 h-3 inline mx-1" /> {service.arrival}</div><div className="text-[11px] text-slate-400 mt-1">{service.serviceDate}</div>
                       {service.delayMinutes > 0 && <div className="text-amber-700 mt-1">+{service.delayMinutes} min delay</div>}
                     </td>
                     <td className="px-3 py-3"><span className={cx('rounded-full border px-2.5 py-1 text-xs font-semibold', statusClass[service.status])}>{service.status}</span></td>
@@ -469,6 +745,9 @@ export const SchedulesView: React.FC = () => {
                     </td>
                   </tr>
                 ))}
+                {visibleServices.length === 0 && (
+                  <tr><td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500">No services match the selected date and filters.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -488,7 +767,7 @@ export const SchedulesView: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 mt-3 text-sm">
-                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs text-slate-500">Departure</div><div className="font-semibold mt-1">{selectedService.departure}</div></div>
+                  <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs text-slate-500">Departure</div><div className="font-semibold mt-1">{selectedService.departure}</div><div className="text-[11px] text-slate-400 mt-1">{selectedService.serviceDate}</div></div>
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs text-slate-500">Arrival</div><div className="font-semibold mt-1">{selectedService.arrival}</div></div>
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs text-slate-500">Utilisation</div><div className="font-semibold mt-1">{selectedService.utilisationPct}% · {capacityLabel(selectedService.utilisationPct)}</div></div>
                   <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs text-slate-500">Affected / Assigned</div><div className="font-semibold mt-1">{selectedService.affectedShipmentIds.length} shipments</div></div>
@@ -643,6 +922,7 @@ export const SchedulesView: React.FC = () => {
               <label className="space-y-1"><span className="text-xs font-medium text-slate-600">Route</span><input value={newTrainRoute} onChange={(event) => setNewTrainRoute(event.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2.5" /></label>
               <label className="space-y-1"><span className="text-xs font-medium text-slate-600">Origin Hub ID</span><input value={newTrainOrigin} onChange={(event) => setNewTrainOrigin(event.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2.5" /></label>
               <label className="space-y-1"><span className="text-xs font-medium text-slate-600">Destination Hub ID</span><input value={newTrainDestination} onChange={(event) => setNewTrainDestination(event.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2.5" /></label>
+              <label className="space-y-1"><span className="text-xs font-medium text-slate-600">Service Date</span><input type="date" value={newTrainDate} onChange={(event) => setNewTrainDate(event.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2.5" /></label>
               <label className="space-y-1"><span className="text-xs font-medium text-slate-600">Departure</span><input value={newTrainDeparture} onChange={(event) => setNewTrainDeparture(event.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2.5" /></label>
               <label className="space-y-1"><span className="text-xs font-medium text-slate-600">Arrival</span><input value={newTrainArrival} onChange={(event) => setNewTrainArrival(event.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2.5" /></label>
               <label className="space-y-1"><span className="text-xs font-medium text-slate-600">Capacity (tons)</span><input value={newTrainCapacity} onChange={(event) => setNewTrainCapacity(event.target.value)} className="w-full border border-slate-200 rounded-xl px-3 py-2.5" /></label>
