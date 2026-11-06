@@ -121,6 +121,7 @@ interface LogisticsContextType {
   rejectRecommendation: (recId: string, reason?: string) => void;
   submitRecommendationForManagerApproval: (recId: string, notes?: string) => void;
   applyCoordinatorOperationalRecovery: (recId: string, notes?: string) => void;
+  approveLoadSchedulePlan: (loadId: string, shipmentIds: string[], serviceId: string, eta: string, notes?: string) => void;
   requestDriverVerification: (alertId: string, notes?: string) => void;
   resolveSecurityAlert: (alertId: string, notes?: string) => void;
   escalateSecurityAlert: (alertId: string, reason?: string) => void;
@@ -1338,6 +1339,113 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     showToast(`✅ ${recId} applied as an operational adjustment.`);
   };
 
+  const approveLoadSchedulePlan = (
+    loadId: string,
+    shipmentIds: string[],
+    serviceId: string,
+    eta: string,
+    notes = 'Scheduling Agent load plan reviewed and approved by Transport Coordinator'
+  ) => {
+    if (!requireRole(['Transport Coordinator'], 'approve transport load schedules')) return;
+
+    const uniqueIds = Array.from(new Set(shipmentIds));
+    const selectedShipments = shipments.filter((item) => uniqueIds.includes(item.id));
+    if (!selectedShipments.length) {
+      showToast('No shipments were selected for this load.');
+      return;
+    }
+
+    const first = selectedShipments[0];
+    const incompatible = selectedShipments.find((item) =>
+      item.originHub !== first.originHub || item.destinationHub !== first.destinationHub
+    );
+    if (incompatible) {
+      showToast(`Shipment ${incompatible.id} is not compatible with this load corridor.`);
+      return;
+    }
+
+    const isTrain = serviceId.startsWith('T');
+    const isTruck = serviceId.startsWith('TR-') || serviceId.startsWith('FD-');
+    const displayService = isTrain ? `Train ${serviceId}` : isTruck ? `Truck ${serviceId}` : serviceId;
+    const transportType: HubManifest['transportType'] = isTrain ? 'Train' : isTruck ? 'Truck' : 'Intermodal';
+    const now = new Date();
+    const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const expectedParcelIds = selectedShipments.flatMap((shipment) => {
+      if (shipment.parcelIds?.length) return shipment.parcelIds;
+      if (shipment.parcels?.length) return shipment.parcels.map((parcel) => parcel.id);
+      const count = shipment.parcelCount || 1;
+      return Array.from({ length: count }, (_, index) => `P-${shipment.id}-${String(index + 1).padStart(2, '0')}`);
+    });
+
+    setShipments((prev) => prev.map((item) => uniqueIds.includes(item.id) ? {
+      ...item,
+      assignedVehicleOrTrain: displayService,
+      vehicleType: isTrain ? 'Train' : isTruck ? 'Truck' : item.vehicleType,
+      transportMode: isTrain ? 'Road + Rail' : isTruck ? 'Road Direct' : item.transportMode,
+      eta,
+      delayMinutes: 0,
+      hasPendingApproval: false,
+      timeline: item.timeline.map((event) =>
+        event.stage === 'Route & Schedule Planning'
+          ? {
+              ...event,
+              completed: true,
+              current: false,
+              timestamp,
+              notes: `${loadId} assigned to ${displayService} by Transport Coordinator.`,
+              verifiedBy: 'Transport Coordinator',
+            }
+          : event
+      ),
+    } : item));
+
+    const manifestId = `OUT-${loadId}`;
+    setHubManifests((prev) => {
+      const nextManifest: HubManifest = {
+        id: manifestId,
+        hubId: first.originHub,
+        hubName: first.origin,
+        transportType,
+        serviceId,
+        expectedShipmentIds: uniqueIds,
+        expectedParcelIds,
+        receivedParcelIds: [],
+        status: 'Pending',
+        hubStatus: 'Preparing Dispatch',
+        lastUpdated: `${timestamp} Today`,
+        direction: 'Outgoing',
+        originName: first.origin,
+        destinationName: first.destination,
+      };
+      const exists = prev.some((manifest) => manifest.id === manifestId);
+      return exists
+        ? prev.map((manifest) => manifest.id === manifestId ? { ...manifest, ...nextManifest } : manifest)
+        : [...prev, nextManifest];
+    });
+
+    setAgents((prev) => prev.map((agent) => agent.name === 'Scheduling Agent'
+      ? {
+          ...agent,
+          status: 'Monitoring',
+          currentTask: `${loadId} approved on ${serviceId}; monitoring departure, capacity and ${uniqueIds.length} shipment(s)`,
+        }
+      : agent));
+
+    const parcelCount = expectedParcelIds.length;
+    logAudit(
+      currentUser.name,
+      userRole,
+      `Load Schedule Approved: ${loadId} → ${serviceId}`,
+      `${notes} | Shipments: ${uniqueIds.join(', ')} | Parcels: ${parcelCount} | ETA ${eta}`,
+      `Scheduling Agent proposed ${loadId} with ${uniqueIds.length} compatible shipment(s) on ${serviceId}`,
+      'APPROVED / EDITED BY TRANSPORT COORDINATOR',
+      `${loadId} created for outbound hub preparation with ${uniqueIds.length} shipment(s) and ${parcelCount} parcel(s)`,
+      uniqueIds[0]
+    );
+    showToast(`✅ ${loadId} approved: ${uniqueIds.length} shipment(s), ${parcelCount} parcel(s) on ${serviceId}.`);
+  };
+
   const resolveIncident = (incidentId: string, resolution = 'Incident reviewed and operational recovery completed') => {
     if (!requireRole(['Transport Coordinator', 'Hub Operator', 'Security / Risk Officer'], 'resolve incidents')) return;
     const incident = incidents.find((i) => i.id === incidentId);
@@ -1533,6 +1641,7 @@ export const LogisticsProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         rejectRecommendation,
         submitRecommendationForManagerApproval,
         applyCoordinatorOperationalRecovery,
+        approveLoadSchedulePlan,
         requestDriverVerification,
         resolveSecurityAlert,
         escalateSecurityAlert,
